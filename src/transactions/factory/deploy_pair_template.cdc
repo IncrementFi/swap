@@ -2,9 +2,9 @@ import FlowToken from "../../contracts/tokens/FlowToken.cdc"
 
 /// deploy code copied by a deployed contract
 transaction(pairTemplateCode: String) {
-    prepare(deployAccount: AuthAccount) {
-        let token0Vault <- FlowToken.createEmptyVault()
-        let token1Vault <- FlowToken.createEmptyVault()
+    prepare(deployAccount: auth(AddContract) &Account) {
+        let token0Vault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
+        let token1Vault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
         deployAccount.contracts.add(name: "SwapPair", code: pairTemplateCode.utf8, token0Vault: <-token0Vault, token1Vault: <-token1Vault)
     }
 }

@@ -3,15 +3,15 @@ import SwapInterfaces from "../../contracts/SwapInterfaces.cdc"
 import SwapConfig from "../../contracts/SwapConfig.cdc"
 
 transaction() {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
         let lpTokenCollectionStoragePath = SwapConfig.LpTokenCollectionStoragePath
         let lpTokenCollectionPublicPath = SwapConfig.LpTokenCollectionPublicPath
-        var lpTokenCollectionRef = userAccount.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
+        var lpTokenCollectionRef = userAccount.storage.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
         if lpTokenCollectionRef == nil {
-            destroy <- userAccount.load<@AnyResource>(from: lpTokenCollectionStoragePath)
-            userAccount.save(<-SwapFactory.createEmptyLpTokenCollection(), to: lpTokenCollectionStoragePath)
-            userAccount.link<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionPublicPath, target: lpTokenCollectionStoragePath)
-            lpTokenCollectionRef = userAccount.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
+            destroy <- userAccount.storage.load<@AnyResource>(from: lpTokenCollectionStoragePath)
+            userAccount.storage.save(<-SwapFactory.createEmptyLpTokenCollection(), to: lpTokenCollectionStoragePath)
+            let lpTokenCollectionCap = userAccount.capabilities.storage.issue<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionStoragePath)
+            userAccount.capabilities.publish(lpTokenCollectionCap, at: lpTokenCollectionPublicPath)
         }
     }
 }

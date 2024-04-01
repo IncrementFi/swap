@@ -1,5 +1,5 @@
 
 
-pub fun main(path: PublicPath): PublicPath {
+access(all) fun main(path: PublicPath): PublicPath {
     return path
 }

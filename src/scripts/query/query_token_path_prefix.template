@@ -1,5 +1,6 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
-pub fun main(tokenName: String, tokenAddr: Address, userAddr: Address?): {String: AnyStruct} {
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
+
+access(all) fun main(tokenName: String, tokenAddr: Address, userAddr: Address?): {String: AnyStruct} {
 
     let code = getAccount(tokenAddr).contracts.get(name: tokenName)!.code
     
@@ -7,25 +8,25 @@ pub fun main(tokenName: String, tokenAddr: Address, userAddr: Address?): {String
     var balancePath = /public/PathPrefix1Balance
     var receiverPath = /public/PathPrefix1Receiver
     if userAddr != nil {
-        if getAccount(userAddr!).getCapability<&{FungibleToken.Balance}>(balancePath).check() && getAccount(userAddr!).getCapability<&{FungibleToken.Receiver}>(receiverPath).check() {
+        if (getAccount(userAddr!).capabilities.get<&{FungibleToken.Balance}>(balancePath)?.check() ?? false) && (getAccount(userAddr!).capabilities.get<&{FungibleToken.Receiver}>(receiverPath)?.check() ?? false) {
             localPrefix = "PathPrefix1"
         }
 
         balancePath = /public/PathPrefix2Balance
         receiverPath = /public/PathPrefix2Receiver
-        if getAccount(userAddr!).getCapability<&{FungibleToken.Balance}>(balancePath).check() && getAccount(userAddr!).getCapability<&{FungibleToken.Receiver}>(receiverPath).check() {
+        if (getAccount(userAddr!).capabilities.get<&{FungibleToken.Balance}>(balancePath)?.check() ?? false) && (getAccount(userAddr!).capabilities.get<&{FungibleToken.Receiver}>(receiverPath)?.check() ?? false) {
             localPrefix = "PathPrefix2"
         }
 
         balancePath = /public/PathPrefix3Balance
         receiverPath = /public/PathPrefix3Receiver
-        if getAccount(userAddr!).getCapability<&{FungibleToken.Balance}>(balancePath).check() && getAccount(userAddr!).getCapability<&{FungibleToken.Receiver}>(receiverPath).check() {
+        if (getAccount(userAddr!).capabilities.get<&{FungibleToken.Balance}>(balancePath)?.check() ?? false) && (getAccount(userAddr!).capabilities.get<&{FungibleToken.Receiver}>(receiverPath)?.check() ?? false) {
             localPrefix = "PathPrefix3"
         }
 
         balancePath = /public/PathPrefix4Balance
         receiverPath = /public/PathPrefix4Receiver
-        if getAccount(userAddr!).getCapability<&{FungibleToken.Balance}>(balancePath).check() && getAccount(userAddr!).getCapability<&{FungibleToken.Receiver}>(receiverPath).check() {
+        if (getAccount(userAddr!).capabilities.get<&{FungibleToken.Balance}>(balancePath)?.check() ?? false) && (getAccount(userAddr!).capabilities.get<&{FungibleToken.Receiver}>(receiverPath)?.check() ?? false) {
             localPrefix = "PathPrefix4"
         }
     }

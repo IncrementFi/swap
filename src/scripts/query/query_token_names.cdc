@@ -1,5 +1,5 @@
 
-pub fun main(queryAddr: Address): [String] {
+access(all) fun main(queryAddr: Address): [String] {
     let names = getAccount(queryAddr).contracts.names
 
     let tokenNames: [String] = []

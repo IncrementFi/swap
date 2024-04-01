@@ -8,28 +8,28 @@ import SwapConfig from "../contracts/SwapConfig.cdc"
 /// Calculate the average price for the entire period based on the on-chain dex swap pair.
 /// note that the price average is only guaranteed to be over at least 1 period, but may be over a longer period
 ///
-pub contract FixedWindowOracleExample {
+access(all) contract FixedWindowOracleExample {
     /// Window period of the average in seconds
-    pub let PERIOD: UInt64
+    access(all) let PERIOD: UInt64
     /// A.contractAddr.contractName: A.11111111.FlowToken, A.2222222.FUSD
-    pub let token0Key: String
-    pub let token1Key: String
-    pub let isStableswap: Bool
+    access(all) let token0Key: String
+    access(all) let token1Key: String
+    access(all) let isStableswap: Bool
     /// pair address in dex
-    pub let pairAddr: Address
+    access(all) let pairAddr: Address
 
     /// Average price for each PERIOD, updated once per PERIOD (updating interval could be longer than 1 PERIOD)
-    pub var price0Average: UFix64
-    pub var price1Average: UFix64
+    access(all) var price0Average: UFix64
+    access(all) var price1Average: UFix64
 
     /// Cumulative price/timestamp for the last update
-    pub var price0CumulativeLastScaled: UInt256
-    pub var price1CumulativeLastScaled: UInt256
-    pub var blockTimestampLast: UFix64
+    access(all) var price0CumulativeLastScaled: UInt256
+    access(all) var price1CumulativeLastScaled: UInt256
+    access(all) var blockTimestampLast: UFix64
 
 
     /// Update the accumulated price if it exceeds the period.
-    pub fun update() {
+    access(all) fun update() {
         let now = getCurrentBlock().timestamp
         let timeElapsed = now - self.blockTimestampLast
         assert(timeElapsed >= UFix64(self.PERIOD), message: "PERIOD_NOT_ELAPSED ".concat(timeElapsed.toString().concat("s")))
@@ -51,7 +51,7 @@ pub contract FixedWindowOracleExample {
 
     /// Queries twap price data
     /// Returns 0.0 for data n/a or invalid input token
-    pub fun twap(tokenKey: String): UFix64 {
+    access(all) fun twap(tokenKey: String): UFix64 {
         if (tokenKey == self.token0Key) {
             return self.price0Average
         } else if (tokenKey == self.token1Key) {
@@ -71,7 +71,7 @@ pub contract FixedWindowOracleExample {
             StableSwapFactory.getPairAddress(token0Key: tokenAKey, token1Key: tokenBKey) ?? panic("non-existent stableswap-pair") :
             SwapFactory.getPairAddress(token0Key: tokenAKey, token1Key: tokenBKey) ?? panic("non-existent pair")
 
-        let pairPublicRef = getAccount(self.pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()
+        let pairPublicRef = getAccount(self.pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)
             ?? panic("cannot borrow reference to PairPublic")
         let pairInfo = pairPublicRef.getPairInfo()
         self.token0Key = pairInfo[0] as! String

@@ -1,5 +1,5 @@
 import REVV from "../tokens/REVV.cdc" // 0xd01e482eb680ec9f
-import FungibleToken from "../tokens/FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
 import FlowToken from "../tokens/FlowToken.cdc" // 0x1654653399040a61
 import TeleportedTetherToken from "../tokens/TeleportedTetherToken.cdc" // 0xcfdd90d4a00f7b5b
 
@@ -7,15 +7,15 @@ import TeleportedTetherToken from "../tokens/TeleportedTetherToken.cdc" // 0xcfd
 // Exchange pair between REVV and FlowToken
 // Token1: REVV
 // Token2: FlowToken
-pub contract RevvFlowSwapPair: FungibleToken {
+access(all) contract RevvFlowSwapPair: FungibleToken {
   // Frozen flag controlled by Admin
-  pub var isFrozen: Bool
+  access(all) var isFrozen: Bool
   
   // Total supply of RevvFlowSwapPair liquidity token in existence
-  pub var totalSupply: UFix64
+  access(all) var totalSupply: UFix64
 
   // Fee charged when performing token swap
-  pub var feePercentage: UFix64
+  access(all) var feePercentage: UFix64
 
   // Controls REVV vault
   access(contract) let token1Vault: @REVV.Vault
@@ -24,36 +24,36 @@ pub contract RevvFlowSwapPair: FungibleToken {
   access(contract) let token2Vault: @FlowToken.Vault
 
   // Defines token vault storage path
-  pub let TokenStoragePath: StoragePath
+  access(all) let TokenStoragePath: StoragePath
 
   // Defines token vault public balance path
-  pub let TokenPublicBalancePath: PublicPath
+  access(all) let TokenPublicBalancePath: PublicPath
 
   // Defines token vault public receiver path
-  pub let TokenPublicReceiverPath: PublicPath
+  access(all) let TokenPublicReceiverPath: PublicPath
 
   // Event that is emitted when the contract is created
-  pub event TokensInitialized(initialSupply: UFix64)
+  access(all) event TokensInitialized(initialSupply: UFix64)
 
   // Event that is emitted when tokens are withdrawn from a Vault
-  pub event TokensWithdrawn(amount: UFix64, from: Address?)
+  access(all) event TokensWithdrawn(amount: UFix64, from: Address?)
 
   // Event that is emitted when tokens are deposited to a Vault
-  pub event TokensDeposited(amount: UFix64, to: Address?)
+  access(all) event TokensDeposited(amount: UFix64, to: Address?)
 
   // Event that is emitted when new tokens are minted
-  pub event TokensMinted(amount: UFix64)
+  access(all) event TokensMinted(amount: UFix64)
 
   // Event that is emitted when tokens are destroyed
-  pub event TokensBurned(amount: UFix64)
+  access(all) event TokensBurned(amount: UFix64)
 
   // Event that is emitted when trading fee is updated
-  pub event FeeUpdated(feePercentage: UFix64)
+  access(all) event FeeUpdated(feePercentage: UFix64)
 
   // Event that is emitted when a swap happens
   // Side 1: from token1 to token2
   // Side 2: from token2 to token1
-  pub event Trade(token1Amount: UFix64, token2Amount: UFix64, side: UInt8)
+  access(all) event Trade(token1Amount: UFix64, token2Amount: UFix64, side: UInt8)
 
   // Vault
   //
@@ -67,15 +67,40 @@ pub contract RevvFlowSwapPair: FungibleToken {
   // out of thin air. A special Minter resource needs to be defined to mint
   // new tokens.
   //
-  pub resource Vault: FungibleToken.Provider, FungibleToken.Receiver, FungibleToken.Balance {
+  access(all) resource Vault: FungibleToken.Vault {
 
     // holds the balance of a users tokens
-    pub var balance: UFix64
+    access(all) var balance: UFix64
 
     // initialize the balance at resource creation time
     init(balance: UFix64) {
       self.balance = balance
     }
+
+    access(contract) fun burnCallback() {
+      if self.balance > 0.0 {
+        RevvFlowSwapPair.totalSupply = RevvFlowSwapPair.totalSupply - self.balance
+      }
+      self.balance = 0.0
+    }
+
+    /// getSupportedVaultTypes optionally returns a list of vault types that this receiver accepts
+    access(all) view fun getSupportedVaultTypes(): {Type: Bool} {
+      return {self.getType(): true}
+    }
+
+    access(all) view fun isSupportedVaultType(type: Type): Bool {
+      if (type == self.getType()) { return true } else { return false }
+    }
+
+    /// Asks if the amount can be withdrawn from this vault
+    access(all) view fun isAvailableToWithdraw(amount: UFix64): Bool {
+      return amount <= self.balance
+    }
+
+    /// Added simply to conform to FT-V2 interface.
+    access(all) view fun getViews(): [Type] { return [] }
+    access(all) fun resolveView(_ view: Type): AnyStruct? { return nil }
 
     // withdraw
     //
@@ -86,7 +111,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
     // created Vault to the context that called so it can be deposited
     // elsewhere.
     //
-    pub fun withdraw(amount: UFix64): @FungibleToken.Vault {
+    access(FungibleToken.Withdraw) fun withdraw(amount: UFix64): @{FungibleToken.Vault} {
       self.balance = self.balance - amount
       emit TokensWithdrawn(amount: amount, from: self.owner?.address)
       return <-create Vault(balance: amount)
@@ -99,7 +124,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
     // It is allowed to destroy the sent Vault because the Vault
     // was a temporary holder of the tokens. The Vault's balance has
     // been consumed and therefore can be destroyed.
-    pub fun deposit(from: @FungibleToken.Vault) {
+    access(all) fun deposit(from: @{FungibleToken.Vault}) {
       let vault <- from as! @RevvFlowSwapPair.Vault
       self.balance = self.balance + vault.balance
       emit TokensDeposited(amount: vault.balance, to: self.owner?.address)
@@ -107,8 +132,8 @@ pub contract RevvFlowSwapPair: FungibleToken {
       destroy vault
     }
 
-    destroy() {
-      RevvFlowSwapPair.totalSupply = RevvFlowSwapPair.totalSupply - self.balance
+    access(all) fun createEmptyVault(): @{FungibleToken.Vault} {
+      return <-create Vault(balance: 0.0)
     }
   }
 
@@ -119,13 +144,17 @@ pub contract RevvFlowSwapPair: FungibleToken {
   // and store the returned Vault in their storage in order to allow their
   // account to be able to receive deposits of this token type.
   //
-  pub fun createEmptyVault(): @FungibleToken.Vault {
+  access(all) fun createEmptyVault(vaultType: Type): @RevvFlowSwapPair.Vault {
     return <-create Vault(balance: 0.0)
   }
 
-  pub resource TokenBundle {
-    pub var token1: @REVV.Vault
-    pub var token2: @FlowToken.Vault
+  /// Added simply to conform to FT-V2 interface.
+  access(all) view fun getContractViews(resourceType: Type?): [Type] { return [] }
+  access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? { return nil }
+
+  access(all) resource TokenBundle {
+    access(all) var token1: @REVV.Vault
+    access(all) var token2: @FlowToken.Vault
 
     // initialize the vault bundle
     init(fromToken1: @REVV.Vault, fromToken2: @FlowToken.Vault) {
@@ -133,44 +162,39 @@ pub contract RevvFlowSwapPair: FungibleToken {
       self.token2 <- fromToken2
     }
 
-    pub fun depositToken1(from: @REVV.Vault) {
-      self.token1.deposit(from: <- (from as! @FungibleToken.Vault))
+    access(all) fun depositToken1(from: @REVV.Vault) {
+      self.token1.deposit(from: <- from)
     }
 
-    pub fun depositToken2(from: @FlowToken.Vault) {
-      self.token2.deposit(from: <- (from as! @FungibleToken.Vault))
+    access(all) fun depositToken2(from: @FlowToken.Vault) {
+      self.token2.deposit(from: <- from)
     }
 
-    pub fun withdrawToken1(): @REVV.Vault {
-      var vault <- REVV.createEmptyVault() as! @REVV.Vault
+    access(all) fun withdrawToken1(): @REVV.Vault {
+      var vault <- REVV.createEmptyVault(vaultType: Type<@REVV.Vault>())
       vault <-> self.token1
       return <- vault
     }
 
-    pub fun withdrawToken2(): @FlowToken.Vault {
-      var vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+    access(all) fun withdrawToken2(): @FlowToken.Vault {
+      var vault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
       vault <-> self.token2
       return <- vault
-    }
-
-    destroy() {
-      destroy self.token1
-      destroy self.token2
     }
   }
 
   // createEmptyBundle
   //
-  pub fun createEmptyTokenBundle(): @RevvFlowSwapPair.TokenBundle {
+  access(all) fun createEmptyTokenBundle(): @RevvFlowSwapPair.TokenBundle {
     return <- create TokenBundle(
-      fromToken1: <- (REVV.createEmptyVault() as! @REVV.Vault),
-      fromToken2: <- (FlowToken.createEmptyVault() as! @FlowToken.Vault)
+      fromToken1: <- (REVV.createEmptyVault(vaultType: Type<@REVV.Vault>())),
+      fromToken2: <- (FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>()))
     )
   }
 
   // createTokenBundle
   //
-  pub fun createTokenBundle(fromToken1: @REVV.Vault, fromToken2: @FlowToken.Vault): @RevvFlowSwapPair.TokenBundle {
+  access(all) fun createTokenBundle(fromToken1: @REVV.Vault, fromToken2: @FlowToken.Vault): @RevvFlowSwapPair.TokenBundle {
     return <- create TokenBundle(fromToken1: <- fromToken1, fromToken2: <- fromToken2)
   }
 
@@ -196,22 +220,22 @@ pub contract RevvFlowSwapPair: FungibleToken {
   // total supply in the Vault destructor.
   //
   access(contract) fun burnTokens(from: @RevvFlowSwapPair.Vault) {
-    let vault <- from as! @RevvFlowSwapPair.Vault
+    let vault <- from
     let amount = vault.balance
     destroy vault
     emit TokensBurned(amount: amount)
   }
 
-  pub resource Admin {
-    pub fun freeze() {
+  access(all) resource Admin {
+    access(all) fun freeze() {
       RevvFlowSwapPair.isFrozen = true
     }
 
-    pub fun unfreeze() {
+    access(all) fun unfreeze() {
       RevvFlowSwapPair.isFrozen = false
     }
 
-    pub fun addInitialLiquidity(from: @RevvFlowSwapPair.TokenBundle): @RevvFlowSwapPair.Vault {
+    access(all) fun addInitialLiquidity(from: @RevvFlowSwapPair.TokenBundle): @RevvFlowSwapPair.Vault {
       pre {
         RevvFlowSwapPair.totalSupply == 0.0: "Pair already initialized"
       }
@@ -231,16 +255,16 @@ pub contract RevvFlowSwapPair: FungibleToken {
       return <- RevvFlowSwapPair.mintTokens(amount: 1.0)
     }
 
-    pub fun updateFeePercentage(feePercentage: UFix64) {
+    access(all) fun updateFeePercentage(feePercentage: UFix64) {
       RevvFlowSwapPair.feePercentage = feePercentage
 
       emit FeeUpdated(feePercentage: feePercentage)
     }
   }
 
-  pub struct PoolAmounts {
-    pub let token1Amount: UFix64
-    pub let token2Amount: UFix64
+  access(all) struct PoolAmounts {
+    access(all) let token1Amount: UFix64
+    access(all) let token2Amount: UFix64
 
     init(token1Amount: UFix64, token2Amount: UFix64) {
       self.token1Amount = token1Amount
@@ -248,17 +272,17 @@ pub contract RevvFlowSwapPair: FungibleToken {
     }
   }
 
-  pub fun getFeePercentage(): UFix64 {
+  access(all) fun getFeePercentage(): UFix64 {
     return self.feePercentage
   }
 
   // Check current pool amounts
-  pub fun getPoolAmounts(): PoolAmounts {
+  access(all) fun getPoolAmounts(): PoolAmounts {
     return PoolAmounts(token1Amount: RevvFlowSwapPair.token1Vault.balance, token2Amount: RevvFlowSwapPair.token2Vault.balance)
   }
 
   // Get quote for Token1 (given) -> Token2
-  pub fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     // token1Amount * token2Amount = token1Amount' * token2Amount' = (token1Amount + amount) * (token2Amount - quote)
@@ -268,7 +292,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
   }
 
   // Get quote for Token1 -> Token2 (given)
-  pub fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     assert(poolAmounts.token2Amount > amount, message: "Not enough Token2 in the pool")
@@ -280,7 +304,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 (given) -> Token1
-  pub fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     // token1Amount * token2Amount = token1Amount' * token2Amount' = (token2Amount + amount) * (token1Amount - quote)
@@ -290,7 +314,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 -> Token1 (given)
-  pub fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     assert(poolAmounts.token1Amount > amount, message: "Not enough Token1 in the pool")
@@ -302,7 +326,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
   }
 
   // Swaps Token1 (REVV) -> Token2 (FLOW)
-  pub fun swapToken1ForToken2(from: @REVV.Vault): @FlowToken.Vault {
+  access(all) fun swapToken1ForToken2(from: @REVV.Vault): @FlowToken.Vault {
     pre {
       !RevvFlowSwapPair.isFrozen: "RevvFlowSwapPair is frozen"
       from.balance > 0.0: "Empty token vault"
@@ -315,14 +339,14 @@ pub contract RevvFlowSwapPair: FungibleToken {
 
     assert(token2Amount > 0.0, message: "Exchanged amount too small")
 
-    self.token1Vault.deposit(from: <- (from as! @FungibleToken.Vault))
+    self.token1Vault.deposit(from: <- from)
     emit Trade(token1Amount: token1Amount, token2Amount: token2Amount, side: 1)
 
     return <- (self.token2Vault.withdraw(amount: token2Amount) as! @FlowToken.Vault)
   }
 
   // Swap Token2 (FLOW) -> Token1 (REVV)
-  pub fun swapToken2ForToken1(from: @FlowToken.Vault): @REVV.Vault {
+  access(all) fun swapToken2ForToken1(from: @FlowToken.Vault): @REVV.Vault {
     pre {
       !RevvFlowSwapPair.isFrozen: "RevvFlowSwapPair is frozen"
       from.balance > 0.0: "Empty token vault"
@@ -335,14 +359,14 @@ pub contract RevvFlowSwapPair: FungibleToken {
 
     assert(token1Amount > 0.0, message: "Exchanged amount too small")
 
-    self.token2Vault.deposit(from: <- (from as! @FungibleToken.Vault))
+    self.token2Vault.deposit(from: <- from)
     emit Trade(token1Amount: token1Amount, token2Amount: token2Amount, side: 2)
 
     return <- (self.token1Vault.withdraw(amount: token1Amount) as! @REVV.Vault)
   }
 
   // Used to add liquidity without minting new liquidity token
-  pub fun donateLiquidity(from: @RevvFlowSwapPair.TokenBundle) {
+  access(all) fun donateLiquidity(from: @RevvFlowSwapPair.TokenBundle) {
     let token1Vault <- from.withdrawToken1()
     let token2Vault <- from.withdrawToken2()
 
@@ -352,7 +376,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
     destroy from
   }
 
-  pub fun addLiquidity(from: @RevvFlowSwapPair.TokenBundle): @RevvFlowSwapPair.Vault {
+  access(all) fun addLiquidity(from: @RevvFlowSwapPair.TokenBundle): @RevvFlowSwapPair.Vault {
     pre {
       self.totalSupply > 0.0: "Pair must be initialized by admin first"
     }
@@ -382,7 +406,7 @@ pub contract RevvFlowSwapPair: FungibleToken {
     return <- liquidityTokenVault
   }
 
-  pub fun removeLiquidity(from: @RevvFlowSwapPair.Vault): @RevvFlowSwapPair.TokenBundle {
+  access(all) fun removeLiquidity(from: @RevvFlowSwapPair.Vault): @RevvFlowSwapPair.TokenBundle {
     pre {
       from.balance > 0.0: "Empty liquidity token vault"
       from.balance < RevvFlowSwapPair.totalSupply: "Cannot remove all liquidity"
@@ -413,13 +437,13 @@ pub contract RevvFlowSwapPair: FungibleToken {
     self.TokenPublicReceiverPath = /public/revvFlowSwapLpReceiver
 
     // Setup internal REVV vault
-    self.token1Vault <- REVV.createEmptyVault() as! @REVV.Vault
+    self.token1Vault <- REVV.createEmptyVault(vaultType: Type<@REVV.Vault>())
 
     // Setup internal FlowToken vault
-    self.token2Vault <- FlowToken.createEmptyVault() as! @FlowToken.Vault
+    self.token2Vault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
 
     let admin <- create Admin()
-    self.account.save(<-admin, to: /storage/revvFlowSwapAdmin)
+    self.account.storage.save(<-admin, to: /storage/revvFlowSwapAdmin)
 
     // Emit an event that shows that the contract was initialized
     emit TokensInitialized(initialSupply: self.totalSupply)

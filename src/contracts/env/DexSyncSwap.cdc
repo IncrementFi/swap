@@ -1,6 +1,6 @@
-import FungibleToken from "../tokens/FungibleToken.cdc"
+import FungibleToken from "./FungibleToken.cdc"
 
-pub contract DexSyncSwap {
+access(all) contract DexSyncSwap {
 
 
    /// Below event get emitted during `swapExactSourceToTargetTokenUsingPath` & `swapExactSourceToTargetTokenUsingPathAndReturn`
@@ -13,7 +13,7 @@ pub contract DexSyncSwap {
    /// @param receivedTargetTokenAmount: Amount of targetToken receiver would receive after swapping given `sourceTokenAmount`.
    /// @param sourceToken: Type of sourceToken. eg. Type<FLOW>
    /// @param targetToken: Type of targetToken. eg. Type<USDC>
-   pub event Swap(
+   access(all) event Swap(
         receiverAddress: Address?,
         sourceTokenAmount: UFix64,
         receivedTargetTokenAmount: UFix64,
@@ -23,15 +23,15 @@ pub contract DexSyncSwap {
 
 
     /// Resource that get returned after the `swapExactSourceToTargetTokenUsingPathAndReturn` function execution.
-    pub resource interface ExactSwapAndReturnValue {
+    access(all) resource interface ExactSwapAndReturnValue {
         /// It represents the Vault that holds target token and would be returned
         /// after a swap. 
-        pub let targetTokenVault: @FungibleToken.Vault
+        access(all) let targetTokenVault: @{FungibleToken.Vault}
         /// It is an optional vault that holds the leftover source tokens after a swap.
-        pub var remainingSourceTokenVault: @FungibleToken.Vault?
+        access(all) let remainingSourceTokenVault: @{FungibleToken.Vault}?
     }
 
-    pub resource interface ImmediateSwap {
+    access(all) resource interface ImmediateSwap {
 
         /// @notice It will Swap the source token for the target token, In the below API, provided `sourceVault` would be consumed fully
         ///
@@ -58,9 +58,9 @@ pub contract DexSyncSwap {
         /// @param expiry:                     Unix timestamp after which trade would get invalidated.
         /// @param recipient:                  A valid capability that receives target token after the completion of function execution.
         /// @return receivedTargetTokenAmount: Amount of tokens user would received after the swap
-        pub fun swapExactSourceToTargetTokenUsingPath(
+        access(all) fun swapExactSourceToTargetTokenUsingPath(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             minimumTargetTokenAmount: UFix64,
             expiry: UFix64,
             recipient: Capability<&{FungibleToken.Receiver}>,
@@ -104,12 +104,12 @@ pub contract DexSyncSwap {
         ///                                  then function execution would throw a error.
         /// @param expiry:                   Unix timestamp after which trade would get invalidated.
         /// @return A valid vault that holds target token and an optional vault that may hold leftover source tokens.
-        pub fun swapExactSourceToTargetTokenUsingPathAndReturn(
+        access(all) fun swapExactSourceToTargetTokenUsingPathAndReturn(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             minimumTargetTokenAmount: UFix64,
             expiry: UFix64
-        ): @FungibleToken.Vault {
+        ): @{FungibleToken.Vault} {
             pre {
                 expiry >= getCurrentBlock().timestamp : "Expired swap request"
                 sourceToTargetTokenPath.length >= 2 : "Incorrect source to target token path"
@@ -145,9 +145,9 @@ pub contract DexSyncSwap {
         /// @param expiry:                     Unix timestamp after which trade would get invalidated.
         /// @param recipient:                  A valid capability that receives target token after the completion of function execution.
         /// @param remainingSourceTokenRecipient: A valid capability that receives surplus source token after the completion of function execution.
-        pub fun swapSourceToExactTargetTokenUsingPath(
+        access(all) fun swapSourceToExactTargetTokenUsingPath(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             exactTargetAmount: UFix64,
             expiry: UFix64,
             recipient: Capability<&{FungibleToken.Receiver}>,
@@ -192,12 +192,12 @@ pub contract DexSyncSwap {
         ///                                 function execution would throw a error.
         /// @param expiry:                  Unix timestamp after which trade would get invalidated.
         /// @return A valid vault that holds target token and an optional vault that may hold leftover source tokens.
-        pub fun swapSourceToExactTargetTokenUsingPathAndReturn(
+        access(all) fun swapSourceToExactTargetTokenUsingPathAndReturn(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             exactTargetAmount: UFix64,
             expiry: UFix64
-        ): @AnyResource{DexSyncSwap.ExactSwapAndReturnValue} {
+        ): @{DexSyncSwap.ExactSwapAndReturnValue} {
             pre {
                 expiry >= getCurrentBlock().timestamp : "Expired swap request"
                 sourceToTargetTokenPath.length >= 2 : "Incorrect source to target token path"
@@ -211,7 +211,7 @@ pub contract DexSyncSwap {
     }
 
 
-    pub resource interface ImmediateSwapQuotation {
+    access(all) resource interface ImmediateSwapQuotation {
         
         /// @notice Provides the quotation of the target token amount for the
         /// corresponding provided sell amount i.e amount of source tokens.
@@ -230,7 +230,7 @@ pub contract DexSyncSwap {
         /// @param sourceAmount Amount of source token user wants to sell to buy target token.
         /// @return Amount of target token user would get after selling `sourceAmount`.
         ///
-        pub fun getExactSellQuoteUsingPath(
+        access(all) fun getExactSellQuoteUsingPath(
             sourceToTargetTokenPath: [Type],
             sourceAmount: UFix64
         ): UFix64?
@@ -253,7 +253,7 @@ pub contract DexSyncSwap {
         /// @param targetAmount: Amount of target token user wants to buy.
         /// @return Amount of source token user has to pay to buy provided `targetAmount` of target token.
         ///
-        pub fun getExactBuyQuoteUsingPath(
+        access(all) fun getExactBuyQuoteUsingPath(
             sourceToTargetTokenPath: [Type],
             targetAmount: UFix64
         ): UFix64?

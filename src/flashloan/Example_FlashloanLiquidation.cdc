@@ -1,14 +1,14 @@
-import FungibleToken from "../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../contracts/env/FungibleToken.cdc"
 import SwapConfig from "../contracts/SwapConfig.cdc"
 import SwapFactory from "../contracts/SwapFactory.cdc"
 import SwapInterfaces from "../contracts/SwapInterfaces.cdc"
 
-pub contract Example_FlashloanLiquidation {
+access(all) contract Example_FlashloanLiquidation {
     // Specific address to receive flashloan-liquidation profits, used as auth purposes
-    pub let profitReceiver: Address
+    access(all) let profitReceiver: Address
 
-    pub resource FlashloanExecutor: SwapInterfaces.FlashLoanExecutor {
-        pub fun executeAndRepay(loanedToken: @FungibleToken.Vault, params: {String: AnyStruct}): @FungibleToken.Vault {
+    access(all) resource FlashloanExecutor: SwapInterfaces.FlashLoanExecutor {
+        access(all) fun executeAndRepay(loanedToken: @{FungibleToken.Vault}, params: {String: AnyStruct}): @{FungibleToken.Vault} {
             pre {
                 params.containsKey("profitReceiver") && ((params["profitReceiver"]! as! Address) == Example_FlashloanLiquidation.profitReceiver): "not-authorized caller"
             }
@@ -38,10 +38,8 @@ pub contract Example_FlashloanLiquidation {
 
         // Set up FlashLoanExecutor resource
         let pathStr = "swap_flashloan_executor_path"
-        let executorPrivatePath = PrivatePath(identifier: pathStr)!
         let executorStoragePath = StoragePath(identifier: pathStr)!
-        destroy <-self.account.load<@AnyResource>(from: executorStoragePath)
-        self.account.save(<- create FlashloanExecutor(), to: executorStoragePath)
-        self.account.link<&{SwapInterfaces.FlashLoanExecutor}>(executorPrivatePath, target: executorStoragePath)
+        destroy <-self.account.storage.load<@AnyResource>(from: executorStoragePath)
+        self.account.storage.save(<- create FlashloanExecutor(), to: executorStoragePath)
     }
 }

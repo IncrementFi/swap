@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapRouter from "../../contracts/SwapRouter.cdc"
 import SwapError from "../../contracts/SwapError.cdc"
 
@@ -14,7 +14,7 @@ transaction(
     Token1Name: String,
     Token1Addr: Address
 ) {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "EXPIRED",
@@ -28,13 +28,21 @@ transaction(
 
         var tokenOutAmountTotal = 0.0
 
-        var tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+        var tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         if tokenOutReceiverRef == nil {
-            userAccount.save(<-getAccount(Token1Addr).contracts.borrow<&FungibleToken>(name: Token1Name)!.createEmptyVault(), to: tokenOutVaultPath)
-            userAccount.link<&{FungibleToken.Receiver}>(tokenOutReceiverPath, target: tokenOutVaultPath)
-            userAccount.link<&{FungibleToken.Balance}>(tokenOutBalancePath, target: tokenOutVaultPath)
-
-            tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+            let token1AddrStr = Token1Addr.toString()
+            let token1AddrStr0xTrimmed = token1AddrStr.slice(from: 2, upTo: token1AddrStr.length)
+            let token1RuntimeType = CompositeType("A.".concat(token1AddrStr0xTrimmed).concat(".").concat(Token1Name)) ?? panic("token1 get runtime type fail")
+            userAccount.storage.save(<-getAccount(Token1Addr).contracts.borrow<&{FungibleToken}>(name: Token1Name)!.createEmptyVault(vaultType: token1RuntimeType), to: tokenOutVaultPath)
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath),
+                at: tokenOutReceiverPath
+            )
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Balance}>(tokenOutVaultPath),
+                at: tokenOutBalancePath
+            )
+            tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         }
 
         var pathIndex = 0
@@ -47,7 +55,7 @@ transaction(
                 log(path)
                 let tokenInAmount = amountInSplit[pathIndex]
 
-                let tokenInVault <- userAccount.borrow<&FungibleToken.Vault>(from: tokenInVaultPath)!.withdraw(amount: tokenInAmount)
+                let tokenInVault <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: tokenInVaultPath)!.withdraw(amount: tokenInAmount)
                 let tokenOutVault <- SwapRouter.swapWithPath(vaultIn: <- tokenInVault, tokenKeyPath: path, exactAmounts: nil)
 
                 tokenOutAmountTotal = tokenOutAmountTotal + tokenOutVault.balance

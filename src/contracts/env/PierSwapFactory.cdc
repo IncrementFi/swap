@@ -1,4 +1,4 @@
-import FungibleToken from "../tokens/FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
 import PierLPToken from "./PierLPToken.cdc" // 0x609e10301860b683
 import IPierPair from "./IPierPair.cdc" // 0x609e10301860b683
 import PierPair from "./PierPair.cdc" // 0x609e10301860b683
@@ -15,19 +15,19 @@ and querying existing pools.
 @author Metapier Foundation Ltd.
 
  */
-pub contract PierSwapFactory {
+access(all) contract PierSwapFactory {
 
     // Event that is emitted when the contract is created
-    pub event ContractInitialized()
+    access(all) event ContractInitialized()
 
     // Event that is emitted when a new pool is created
-    pub event NewPoolCreated(poolId: UInt64)
+    access(all) event NewPoolCreated(poolId: UInt64)
 
     // Defines liquidity pool storage path
-    pub let SwapPoolStoragePath: StoragePath
+    access(all) let SwapPoolStoragePath: StoragePath
 
     // Defines liquidity pool public access path
-    pub let SwapPoolPublicPath: PublicPath
+    access(all) let SwapPoolPublicPath: PublicPath
 
     // A mapping from pair hash to pool id (pool owner's address in UInt64)
     access(self) let pairHashToPoolId: {String: UInt64}
@@ -50,7 +50,7 @@ pub contract PierSwapFactory {
     }
 
     // Returns the number of liquidity pools created so far
-    pub fun getPoolsSize(): Int {
+    access(all) fun getPoolsSize(): Int {
         return self.pools.length
     }
 
@@ -60,7 +60,7 @@ pub contract PierSwapFactory {
     // @param index The index of the stored liquidity pool
     // @return The pool id representing the pool owner's address
     //  (in UInt64)
-    pub fun getPoolIdByIndex(index: UInt64): UInt64 {
+    access(all) fun getPoolIdByIndex(index: UInt64): UInt64 {
         return self.pools[index]
     }
 
@@ -69,9 +69,9 @@ pub contract PierSwapFactory {
     //
     // @param poolId The pool id representing the pool owner's address
     // @return The resource reference of the requested liquidity pool
-    pub fun getPoolById(poolId: UInt64): &PierPair.Pool{IPierPair.IPool} {
+    access(all) fun getPoolById(poolId: UInt64): &{IPierPair.IPool} {
         let address = Address(poolId)
-        return getAccount(address).getCapability<&PierPair.Pool{IPierPair.IPool}>(self.SwapPoolPublicPath).borrow()
+        return getAccount(address).capabilities.borrow<&{IPierPair.IPool}>(self.SwapPoolPublicPath)
             ?? panic("Metapier PierSwapFactory: Couldn't borrow swap pool from the account")
     }
 
@@ -80,7 +80,7 @@ pub contract PierSwapFactory {
     //
     // @param index The index of the stored liquidity pool
     // @return The resource reference of the requested liquidity pool
-    pub fun getPoolByIndex(index: UInt64): &PierPair.Pool{IPierPair.IPool} {
+    access(all) fun getPoolByIndex(index: UInt64): &{IPierPair.IPool} {
         return self.getPoolById(poolId: self.pools[index])
     }
 
@@ -91,7 +91,7 @@ pub contract PierSwapFactory {
     // @param tokenBType The type of token B's vault
     // @return The resource reference of the requested liquidity pool, or nil
     //  if there's no liquidity pool for the token pair
-    pub fun getPoolByTypes(tokenAType: Type, tokenBType: Type): &PierPair.Pool{IPierPair.IPool}? {
+    access(all) fun getPoolByTypes(tokenAType: Type, tokenBType: Type): &{IPierPair.IPool}? {
         let pairHash = self.getPairHash(
             tokenATypeIdentifier: tokenAType.identifier, 
             tokenBTypeIdentifier: tokenBType.identifier
@@ -110,7 +110,7 @@ pub contract PierSwapFactory {
     // @param tokenBTypeIdentifier The type identifier of token B's vault
     // @return The resource reference of the requested liquidity pool, or nil
     //  if there's no liquidity pool for the token pair
-    pub fun getPoolByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): &PierPair.Pool{IPierPair.IPool}? {
+    access(all) fun getPoolByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): &{IPierPair.IPool}? {
         let pairHash = self.getPairHash(
             tokenATypeIdentifier: tokenATypeIdentifier, 
             tokenBTypeIdentifier: tokenBTypeIdentifier
@@ -129,7 +129,7 @@ pub contract PierSwapFactory {
     // @param tokenBTypeIdentifier The type identifier of token B's vault
     // @return The pool id of the requested liquidity pool, or nil if
     //  there's no liquidity pool for the token pair
-    pub fun getPoolIdByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): UInt64? {
+    access(all) fun getPoolIdByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): UInt64? {
         let pairHash = self.getPairHash(
             tokenATypeIdentifier: tokenATypeIdentifier, 
             tokenBTypeIdentifier: tokenBTypeIdentifier
@@ -148,10 +148,10 @@ pub contract PierSwapFactory {
     // @param vaultB An empty vault of token B in the pair
     // @param fees A vault that contains the minimum amount of Flow token for account creation
     // @return The pool id of the new liquidity pool
-    pub fun createPoolForPair(
-        vaultA: @FungibleToken.Vault,
-        vaultB: @FungibleToken.Vault,
-        fees: @FungibleToken.Vault
+    access(all) fun createPoolForPair(
+        vaultA: @{FungibleToken.Vault},
+        vaultB: @{FungibleToken.Vault},
+        fees: @{FungibleToken.Vault}
     ): UInt64 {
         pre {
             vaultA.balance == 0.0: "MetaPier PierSwapFactory: Pool creation requires empty vaults"
@@ -162,9 +162,8 @@ pub contract PierSwapFactory {
 
         // deposits fees for account creation
         let receiverRef = self.account
-            .getCapability(/public/flowTokenReceiver)
-            .borrow<&FlowToken.Vault{FungibleToken.Receiver}>()
-			?? panic("Metapier PierSwapFactory: Could not borrow receiver reference to the Flow Token Vault")
+            .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                ?? panic("Metapier PierSwapFactory: Could not borrow receiver reference to the Flow Token Vault")
         receiverRef.deposit(from: <- fees)
 
         // computes the hash strings for both (A, B) and (B, A)
@@ -185,7 +184,7 @@ pub contract PierSwapFactory {
         )
 
         // creates a new account without an owner (public key)
-        let newAccount = AuthAccount(payer: self.account)
+        let newAccount = Account(payer: self.account)
 
         // converts the new account's address to pool id
         let newPoolId = PierMath.AddressToUInt64(address: newAccount.address)
@@ -194,8 +193,11 @@ pub contract PierSwapFactory {
         let newPool <- PierPair.createPool(vaultA: <-vaultA, vaultB: <-vaultB, poolId: newPoolId)
 
         // stores the new pool into the new account
-        newAccount.save(<-newPool, to: self.SwapPoolStoragePath)
-        newAccount.link<&PierPair.Pool{IPierPair.IPool}>(self.SwapPoolPublicPath, target: self.SwapPoolStoragePath)
+        newAccount.storage.save(<-newPool, to: self.SwapPoolStoragePath)
+        newAccount.capabilities.publish(
+            newAccount.capabilities.storage.issue<&{IPierPair.IPool}>(self.SwapPoolStoragePath),
+            at: self.SwapPoolPublicPath
+        )
 
         // registers the pairs (A, B) and (B, A), assigns them to the same pool
         self.pairHashToPoolId[pairABHash] = newPoolId

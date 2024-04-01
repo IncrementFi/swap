@@ -1,6 +1,6 @@
 import TokenOutName from TokenOutAddr
 
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapRouter from "../../contracts/SwapRouter.cdc"
 
 transaction(
@@ -13,17 +13,23 @@ transaction(
     tokenOutReceiverPath: PublicPath,
     tokenOutBalancePath: PublicPath,
 ) {
-    prepare(userAccount: AuthAccount) {
-        var tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
+        var tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         if tokenOutReceiverRef == nil {
-            userAccount.save(<- TokenOutName.createEmptyVault(), to: tokenOutVaultPath)
-            userAccount.link<&TokenOutName.Vault{FungibleToken.Receiver}>(tokenOutReceiverPath, target: tokenOutVaultPath)
-            userAccount.link<&TokenOutName.Vault{FungibleToken.Balance}>(tokenOutBalancePath, target: tokenOutVaultPath)
+            userAccount.storage.save(<- TokenOutName.createEmptyVault(vaultType: Type<@TokenOutName.Vault>()), to: tokenOutVaultPath)
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath),
+                at: tokenOutReceiverPath
+            )
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Balance}>(tokenOutVaultPath),
+                at: tokenOutBalancePath
+            )
 
-            tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+            tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         }
 
-        let exactVaultIn <- userAccount.borrow<&FungibleToken.Vault>(from: tokenInVaultPath)!.withdraw(amount: exactAmountIn)
+        let exactVaultIn <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: tokenInVaultPath)!.withdraw(amount: exactAmountIn)
 
         let vaultOut <- SwapRouter.swapExactTokensForTokens(
             exactVaultIn: <-exactVaultIn,

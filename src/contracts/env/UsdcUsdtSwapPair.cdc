@@ -1,5 +1,5 @@
 import FiatToken from "../tokens/FiatToken.cdc" // 0xb19436aae4d94622
-import FungibleToken from "../tokens/FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
 import FlowToken from "../tokens/FlowToken.cdc" // 0x1654653399040a61
 import TeleportedTetherToken from "../tokens/TeleportedTetherToken.cdc" // 0xcfdd90d4a00f7b5b
 
@@ -7,12 +7,12 @@ import TeleportedTetherToken from "../tokens/TeleportedTetherToken.cdc" // 0xcfd
 // Exchange pair between FiatToken and TeleportedTetherToken
 // Token1: FiatToken (USDC)
 // Token2: TeleportedTetherToken (USDT)
-pub contract UsdcUsdtSwapPair: FungibleToken {
+access(all) contract UsdcUsdtSwapPair: FungibleToken {
   // Frozen flag controlled by Admin
-  pub var isFrozen: Bool
+  access(all) var isFrozen: Bool
   
   // Total supply of UsdcUsdtSwapPair liquidity token in existence
-  pub var totalSupply: UFix64
+  access(all) var totalSupply: UFix64
 
   // Controls FiatToken vault
   access(contract) let token1Vault: @FiatToken.Vault
@@ -21,33 +21,33 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   access(contract) let token2Vault: @TeleportedTetherToken.Vault
 
   // Defines token vault storage path
-  pub let TokenStoragePath: StoragePath
+  access(all) let TokenStoragePath: StoragePath
 
   // Defines token vault public balance path
-  pub let TokenPublicBalancePath: PublicPath
+  access(all) let TokenPublicBalancePath: PublicPath
 
   // Defines token vault public receiver path
-  pub let TokenPublicReceiverPath: PublicPath
+  access(all) let TokenPublicReceiverPath: PublicPath
 
   // Event that is emitted when the contract is created
-  pub event TokensInitialized(initialSupply: UFix64)
+  access(all) event TokensInitialized(initialSupply: UFix64)
 
   // Event that is emitted when tokens are withdrawn from a Vault
-  pub event TokensWithdrawn(amount: UFix64, from: Address?)
+  access(all) event TokensWithdrawn(amount: UFix64, from: Address?)
 
   // Event that is emitted when tokens are deposited to a Vault
-  pub event TokensDeposited(amount: UFix64, to: Address?)
+  access(all) event TokensDeposited(amount: UFix64, to: Address?)
 
   // Event that is emitted when new tokens are minted
-  pub event TokensMinted(amount: UFix64)
+  access(all) event TokensMinted(amount: UFix64)
 
   // Event that is emitted when tokens are destroyed
-  pub event TokensBurned(amount: UFix64)
+  access(all) event TokensBurned(amount: UFix64)
 
   // Event that is emitted when a swap happens
   // Side 1: from token1 to token2
   // Side 2: from token2 to token1
-  pub event Trade(token1Amount: UFix64, token2Amount: UFix64, side: UInt8)
+  access(all) event Trade(token1Amount: UFix64, token2Amount: UFix64, side: UInt8)
 
   // Vault
   //
@@ -61,15 +61,40 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   // out of thin air. A special Minter resource needs to be defined to mint
   // new tokens.
   //
-  pub resource Vault: FungibleToken.Provider, FungibleToken.Receiver, FungibleToken.Balance {
+  access(all) resource Vault: FungibleToken.Vault {
 
     // holds the balance of a users tokens
-    pub var balance: UFix64
+    access(all) var balance: UFix64
 
     // initialize the balance at resource creation time
     init(balance: UFix64) {
       self.balance = balance
     }
+
+    access(contract) fun burnCallback() {
+      if self.balance > 0.0 {
+        UsdcUsdtSwapPair.totalSupply = UsdcUsdtSwapPair.totalSupply - self.balance
+      }
+      self.balance = 0.0
+    }
+
+    /// getSupportedVaultTypes optionally returns a list of vault types that this receiver accepts
+    access(all) view fun getSupportedVaultTypes(): {Type: Bool} {
+      return {self.getType(): true}
+    }
+
+    access(all) view fun isSupportedVaultType(type: Type): Bool {
+      if (type == self.getType()) { return true } else { return false }
+    }
+
+    /// Asks if the amount can be withdrawn from this vault
+    access(all) view fun isAvailableToWithdraw(amount: UFix64): Bool {
+      return amount <= self.balance
+    }
+
+    /// Added simply to conform to FT-V2 interface.
+    access(all) view fun getViews(): [Type] { return [] }
+    access(all) fun resolveView(_ view: Type): AnyStruct? { return nil }
 
     // withdraw
     //
@@ -80,7 +105,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
     // created Vault to the context that called so it can be deposited
     // elsewhere.
     //
-    pub fun withdraw(amount: UFix64): @FungibleToken.Vault {
+    access(FungibleToken.Withdraw) fun withdraw(amount: UFix64): @{FungibleToken.Vault} {
       self.balance = self.balance - amount
       emit TokensWithdrawn(amount: amount, from: self.owner?.address)
       return <-create Vault(balance: amount)
@@ -93,7 +118,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
     // It is allowed to destroy the sent Vault because the Vault
     // was a temporary holder of the tokens. The Vault's balance has
     // been consumed and therefore can be destroyed.
-    pub fun deposit(from: @FungibleToken.Vault) {
+    access(all) fun deposit(from: @{FungibleToken.Vault}) {
       let vault <- from as! @UsdcUsdtSwapPair.Vault
       self.balance = self.balance + vault.balance
       emit TokensDeposited(amount: vault.balance, to: self.owner?.address)
@@ -101,8 +126,8 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
       destroy vault
     }
 
-    destroy() {
-      UsdcUsdtSwapPair.totalSupply = UsdcUsdtSwapPair.totalSupply - self.balance
+    access(all) fun createEmptyVault(): @{FungibleToken.Vault} {
+      return <-create Vault(balance: 0.0)
     }
   }
 
@@ -113,13 +138,13 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   // and store the returned Vault in their storage in order to allow their
   // account to be able to receive deposits of this token type.
   //
-  pub fun createEmptyVault(): @FungibleToken.Vault {
+  access(all) fun createEmptyVault(vaultType: Type): @UsdcUsdtSwapPair.Vault {
     return <-create Vault(balance: 0.0)
   }
 
-  pub resource TokenBundle {
-    pub var token1: @FiatToken.Vault
-    pub var token2: @TeleportedTetherToken.Vault
+  access(all) resource TokenBundle {
+    access(all) var token1: @FiatToken.Vault
+    access(all) var token2: @TeleportedTetherToken.Vault
 
     // initialize the vault bundle
     init(fromToken1: @FiatToken.Vault, fromToken2: @TeleportedTetherToken.Vault) {
@@ -127,44 +152,43 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
       self.token2 <- fromToken2
     }
 
-    pub fun depositToken1(from: @FiatToken.Vault) {
+    access(all) fun depositToken1(from: @FiatToken.Vault) {
       self.token1.deposit(from: <- from)
     }
 
-    pub fun depositToken2(from: @TeleportedTetherToken.Vault) {
+    access(all) fun depositToken2(from: @TeleportedTetherToken.Vault) {
       self.token2.deposit(from: <- from)
     }
 
-    pub fun withdrawToken1(): @FiatToken.Vault {
-      var vault <- FiatToken.createEmptyVault() as! @FiatToken.Vault
+    access(all) fun withdrawToken1(): @FiatToken.Vault {
+      var vault <- FiatToken.createEmptyVault(vaultType: Type<@FiatToken.Vault>())
       vault <-> self.token1
       return <- vault
     }
 
-    pub fun withdrawToken2(): @TeleportedTetherToken.Vault {
-      var vault <- TeleportedTetherToken.createEmptyVault() as! @TeleportedTetherToken.Vault
+    access(all) fun withdrawToken2(): @TeleportedTetherToken.Vault {
+      var vault <- TeleportedTetherToken.createEmptyVault(vaultType: Type<@TeleportedTetherToken.Vault>())
       vault <-> self.token2
       return <- vault
-    }
-
-    destroy() {
-      destroy self.token1
-      destroy self.token2
     }
   }
 
   // createEmptyBundle
   //
-  pub fun createEmptyTokenBundle(): @UsdcUsdtSwapPair.TokenBundle {
+  access(all) fun createEmptyTokenBundle(): @UsdcUsdtSwapPair.TokenBundle {
     return <- create TokenBundle(
-      fromToken1: <- (FiatToken.createEmptyVault() as! @FiatToken.Vault),
-      fromToken2: <- (TeleportedTetherToken.createEmptyVault() as! @TeleportedTetherToken.Vault)
+      fromToken1: <- (FiatToken.createEmptyVault(vaultType: Type<@FiatToken.Vault>())),
+      fromToken2: <- (TeleportedTetherToken.createEmptyVault(vaultType: Type<@TeleportedTetherToken.Vault>()))
     )
   }
 
+  /// Added simply to conform to FT-V2 interface.
+  access(all) view fun getContractViews(resourceType: Type?): [Type] { return [] }
+  access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? { return nil }
+
   // createTokenBundle
   //
-  pub fun createTokenBundle(fromToken1: @FiatToken.Vault, fromToken2: @TeleportedTetherToken.Vault): @UsdcUsdtSwapPair.TokenBundle {
+  access(all) fun createTokenBundle(fromToken1: @FiatToken.Vault, fromToken2: @TeleportedTetherToken.Vault): @UsdcUsdtSwapPair.TokenBundle {
     return <- create TokenBundle(fromToken1: <- fromToken1, fromToken2: <- fromToken2)
   }
 
@@ -190,25 +214,25 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   // total supply in the Vault destructor.
   //
   access(contract) fun burnTokens(from: @UsdcUsdtSwapPair.Vault) {
-    let vault <- from as! @UsdcUsdtSwapPair.Vault
+    let vault <- from
     let amount = vault.balance
     destroy vault
     emit TokensBurned(amount: amount)
   }
 
-  pub resource Admin {
-    pub fun freeze() {
+  access(all) resource Admin {
+    access(all) fun freeze() {
       UsdcUsdtSwapPair.isFrozen = true
     }
 
-    pub fun unfreeze() {
+    access(all) fun unfreeze() {
       UsdcUsdtSwapPair.isFrozen = false
     }
   }
 
-  pub struct PoolAmounts {
-    pub let token1Amount: UFix64
-    pub let token2Amount: UFix64
+  access(all) struct PoolAmounts {
+    access(all) let token1Amount: UFix64
+    access(all) let token2Amount: UFix64
 
     init(token1Amount: UFix64, token2Amount: UFix64) {
       self.token1Amount = token1Amount
@@ -216,17 +240,17 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
     }
   }
 
-  pub fun getFeePercentage(): UFix64 {
+  access(all) fun getFeePercentage(): UFix64 {
     return 0.0
   }
 
   // Check current pool amounts
-  pub fun getPoolAmounts(): PoolAmounts {
+  access(all) fun getPoolAmounts(): PoolAmounts {
     return PoolAmounts(token1Amount: UsdcUsdtSwapPair.token1Vault.balance, token2Amount: UsdcUsdtSwapPair.token2Vault.balance)
   }
 
   // Get quote for Token1 (given) -> Token2
-  pub fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
     pre {
       self.token2Vault.balance >= amount: "Not enough Token2 in the pool"
     }
@@ -236,7 +260,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Get quote for Token1 -> Token2 (given)
-  pub fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
     pre {
       self.token2Vault.balance >= amount: "Not enough Token2 in the pool"
     }
@@ -246,7 +270,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 (given) -> Token1
-  pub fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
     pre {
       self.token1Vault.balance >= amount: "Not enough Token1 in the pool"
     }
@@ -256,7 +280,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 -> Token1 (given)
-  pub fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
+  access(all) fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
     pre {
       self.token1Vault.balance >= amount: "Not enough Token1 in the pool"
     }
@@ -266,7 +290,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Swaps Token1 (FiatToken) -> Token2 (tUSDT)
-  pub fun swapToken1ForToken2(from: @FiatToken.Vault): @TeleportedTetherToken.Vault {
+  access(all) fun swapToken1ForToken2(from: @FiatToken.Vault): @TeleportedTetherToken.Vault {
     pre {
       !UsdcUsdtSwapPair.isFrozen: "UsdcUsdtSwapPair is frozen"
       from.balance > 0.0: "Empty token vault"
@@ -279,14 +303,14 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
 
     assert(token2Amount > 0.0, message: "Exchanged amount too small")
 
-    self.token1Vault.deposit(from: <- (from as! @FungibleToken.Vault))
+    self.token1Vault.deposit(from: <- from)
     emit Trade(token1Amount: token1Amount, token2Amount: token2Amount, side: 1)
 
     return <- (self.token2Vault.withdraw(amount: token2Amount) as! @TeleportedTetherToken.Vault)
   }
 
   // Swap Token2 (tUSDT) -> Token1 (FiatToken)
-  pub fun swapToken2ForToken1(from: @TeleportedTetherToken.Vault): @FiatToken.Vault {
+  access(all) fun swapToken2ForToken1(from: @TeleportedTetherToken.Vault): @FiatToken.Vault {
     pre {
       !UsdcUsdtSwapPair.isFrozen: "UsdcUsdtSwapPair is frozen"
       from.balance > 0.0: "Empty token vault"
@@ -299,14 +323,14 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
 
     assert(token1Amount > 0.0, message: "Exchanged amount too small")
 
-    self.token2Vault.deposit(from: <- (from as! @FungibleToken.Vault))
+    self.token2Vault.deposit(from: <- from)
     emit Trade(token1Amount: token1Amount, token2Amount: token2Amount, side: 2)
 
     return <- (self.token1Vault.withdraw(amount: token1Amount) as! @FiatToken.Vault)
   }
 
   // Used to add liquidity without minting new liquidity token
-  pub fun donateLiquidity(from: @UsdcUsdtSwapPair.TokenBundle) {
+  access(all) fun donateLiquidity(from: @UsdcUsdtSwapPair.TokenBundle) {
     let token1Vault <- from.withdrawToken1()
     let token2Vault <- from.withdrawToken2()
 
@@ -316,7 +340,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
     destroy from
   }
 
-  pub fun addLiquidity(from: @UsdcUsdtSwapPair.TokenBundle): @UsdcUsdtSwapPair.Vault {
+  access(all) fun addLiquidity(from: @UsdcUsdtSwapPair.TokenBundle): @UsdcUsdtSwapPair.Vault {
     pre {
       !UsdcUsdtSwapPair.isFrozen: "UsdcUsdtSwapPair is frozen"
     }
@@ -336,7 +360,7 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
     return <- UsdcUsdtSwapPair.mintTokens(amount: totalLiquidityAmount)
   }
 
-  pub fun removeLiquidity(from: @UsdcUsdtSwapPair.Vault, token1Amount: UFix64, token2Amount: UFix64): @UsdcUsdtSwapPair.TokenBundle {
+  access(all) fun removeLiquidity(from: @UsdcUsdtSwapPair.Vault, token1Amount: UFix64, token2Amount: UFix64): @UsdcUsdtSwapPair.TokenBundle {
     pre {
       !UsdcUsdtSwapPair.isFrozen: "UsdcUsdtSwapPair is frozen"
       from.balance > 0.0: "Empty liquidity token vault"
@@ -363,13 +387,13 @@ pub contract UsdcUsdtSwapPair: FungibleToken {
     self.TokenPublicReceiverPath = /public/usdcUsdtFspLpReceiver
 
     // Setup internal FiatToken vault
-    self.token1Vault <- FiatToken.createEmptyVault() as! @FiatToken.Vault
+    self.token1Vault <- FiatToken.createEmptyVault(vaultType: Type<@FiatToken.Vault>())
 
     // Setup internal TeleportedTetherToken vault
-    self.token2Vault <- TeleportedTetherToken.createEmptyVault() as! @TeleportedTetherToken.Vault
+    self.token2Vault <- TeleportedTetherToken.createEmptyVault(vaultType: Type<@TeleportedTetherToken.Vault>())
 
     let admin <- create Admin()
-    self.account.save(<-admin, to: /storage/usdcUsdtPairAdmin)
+    self.account.storage.save(<-admin, to: /storage/usdcUsdtPairAdmin)
 
     // Emit an event that shows that the contract was initialized
     emit TokensInitialized(initialSupply: self.totalSupply)

@@ -1,11 +1,11 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapFactory from "../../contracts/SwapFactory.cdc"
 import StableSwapFactory from "../../contracts/StableSwapFactory.cdc"
 import SwapInterfaces from "../../contracts/SwapInterfaces.cdc"
 import SwapConfig from "../../contracts/SwapConfig.cdc"
 import SwapError from "../../contracts/SwapError.cdc"
 
-pub fun main(): AnyStruct {
+access(all) fun main(): AnyStruct {
     let token0Key: String = "A.1654653399040a61.FlowToken"
     let token1Key: String = "A.d6f80565193ad727.stFlowToken"
     
@@ -21,7 +21,7 @@ pub fun main(): AnyStruct {
             StableSwapFactory.getPairAddress(token0Key: token0Key, token1Key: token1Key) ?? panic("AddLiquidity: nonexistent stable pair ".concat(token0Key).concat(" <-> ").concat(token1Key).concat(", create stable pair first"))
             :
             SwapFactory.getPairAddress(token0Key: token0Key, token1Key: token1Key) ?? panic("AddLiquidity: nonexistent pair ".concat(token0Key).concat(" <-> ").concat(token1Key).concat(", create pair first"))
-        let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+        let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
         
         let pairInfo = pairPublicRef.getPairInfo()
         var token0Reserve = 0.0

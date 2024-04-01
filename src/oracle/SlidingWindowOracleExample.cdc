@@ -5,28 +5,28 @@ import SwapConfig from "../contracts/SwapConfig.cdc"
 
 /// Sliding window oracle
 ///
-pub contract SlidingWindowOracleExample {
+access(all) contract SlidingWindowOracleExample {
     /// The amount of time (in seconds) the moving average should be computed, e.g. 24 hours
-    pub let windowSize: UInt64
+    access(all) let windowSize: UInt64
     /// The number of observation data stored for windowSize.
     /// As granularity increases from 2, more frequent updates are needed, but moving averages become more precise.
     /// twap data is computed over intervals with sizes in the range: [windowSize - (windowSize / granularity) * 2, windowSize]
-    pub let granularity: UInt64
+    access(all) let granularity: UInt64
     /// The amount of time once an update() is needed, periodSize * granularity == windowSize.
-    pub let periodSize: UInt64
+    access(all) let periodSize: UInt64
     /// A.contractAddr.contractName: A.11111111.FlowToken, A.2222222.FUSD
-    pub let token0Key: String
-    pub let token1Key: String
-    pub let isStableswap: Bool
+    access(all) let token0Key: String
+    access(all) let token1Key: String
+    access(all) let isStableswap: Bool
     /// pair address in dex
-    pub let pairAddr: Address
+    access(all) let pairAddr: Address
     /// An array of price observation data of the pair
     access(self) let pairObservations: [Observation]
 
-    pub struct Observation {
-        pub let timestamp: UFix64
-        pub let price0CumulativeScaled: UInt256
-        pub let price1CumulativeScaled: UInt256
+    access(all) struct Observation {
+        access(all) let timestamp: UFix64
+        access(all) let price0CumulativeScaled: UInt256
+        access(all) let price1CumulativeScaled: UInt256
 
         init(t: UFix64, p0Scaled: UInt256, p1Scaled: UInt256) {
             self.timestamp = t
@@ -37,19 +37,19 @@ pub contract SlidingWindowOracleExample {
 
 
     /// Returns the index of the observation corresponding to the given timestamp
-    pub fun observationIndexOf(timestamp: UFix64): UInt64 {
+    access(all) fun observationIndexOf(timestamp: UFix64): UInt64 {
         return UInt64(timestamp) / self.periodSize % self.granularity
     }
 
     /// Returns the index of the earliest observation of a windowSize (relative to the given timestamp)
-    pub fun firstObservationIndexInWindow(timestamp: UFix64): UInt64 {
+    access(all) fun firstObservationIndexInWindow(timestamp: UFix64): UInt64 {
         let idx = self.observationIndexOf(timestamp: timestamp)
         return (idx + 1) % self.granularity
     }
 
     /// Update the cumulative price for the observation at the current timestamp.
     /// Each observation is updated at most once per periodSize.
-    pub fun update() {
+    access(all) fun update() {
         let now = getCurrentBlock().timestamp
         let idx = self.observationIndexOf(timestamp: now)
         let ob = self.pairObservations[idx]
@@ -66,7 +66,7 @@ pub contract SlidingWindowOracleExample {
 
     /// Queries twap price data of the time range [now - [windowSize, windowSize - 2 * periodSize], now]
     /// Returns 0.0 for data n/a or invalid input token
-    pub fun twap(tokenKey: String): UFix64 {
+    access(all) fun twap(tokenKey: String): UFix64 {
         let now = getCurrentBlock().timestamp
         let first_ob_idx = self.firstObservationIndexInWindow(timestamp: now)
         let first_ob = self.pairObservations[first_ob_idx]
@@ -112,7 +112,7 @@ pub contract SlidingWindowOracleExample {
             StableSwapFactory.getPairAddress(token0Key: tokenAKey, token1Key: tokenBKey) ?? panic("non-existent stableswap-pair") :
             SwapFactory.getPairAddress(token0Key: tokenAKey, token1Key: tokenBKey) ?? panic("non-existent pair")
 
-        let pairPublicRef = getAccount(self.pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()
+        let pairPublicRef = getAccount(self.pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)
             ?? panic("cannot borrow reference to PairPublic")
         let pairInfo = pairPublicRef.getPairInfo()
         self.token0Key = pairInfo[0] as! String
