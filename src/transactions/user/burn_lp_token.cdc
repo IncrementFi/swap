@@ -2,6 +2,7 @@ import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapFactory from "../../contracts/SwapFactory.cdc"
 import SwapInterfaces from "../../contracts/SwapInterfaces.cdc"
 import SwapConfig from "../../contracts/SwapConfig.cdc"
+import LogEntry from "../../contracts/env/LogEntry.cdc"
 
 transaction(
     pairAddr: Address,
@@ -16,5 +17,9 @@ transaction(
 
         let lpTokenTransfer <- lpTokenCollectionFrom.withdraw(pairAddr: pairAddr, amount: lpTokenAmount)
         lpTokenCollectionTo.deposit(pairAddr: pairAddr, lpTokenVault: <- lpTokenTransfer)
+
+        let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
+        let pairInfo = pairPublicRef.getPairInfo()
+        LogEntry.LogBurnSwapLp(token0Key: pairInfo[0] as! String, token1Key: pairInfo[1] as! String, pairAddr: pairAddr, amountToBurn: lpTokenAmount)
     }
 }

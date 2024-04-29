@@ -43,7 +43,7 @@ access(all) contract PierPair: IPierPair {
         access(self) let tokenBVault: @{FungibleToken.Vault}
         access(self) let lpTokenMaster: @PierLPToken.TokenMaster
 
-        access(all) fun getReserves(): [UFix64; 2] {
+        access(all) view fun getReserves(): [UFix64; 2] {
             return [self.tokenAVault.balance, self.tokenBVault.balance]
         }
 
@@ -331,7 +331,7 @@ access(all) contract PierPair: IPierPair {
             poolId: poolId
         )
     }
-    
+
     init() {
         self.MINIMUM_LIQUIDITY = 0.00001
 

@@ -200,7 +200,7 @@ access(all) contract SwapFactory {
             }
         }
 
-        access(all) fun withdraw(pairAddr: Address, amount: UFix64): @{FungibleToken.Vault} {
+        access(FungibleToken.Withdraw) fun withdraw(pairAddr: Address, amount: UFix64): @{FungibleToken.Vault} {
             pre {
                 self.lpTokenVaults.containsKey(pairAddr):
                     SwapError.ErrorEncode(
@@ -222,7 +222,7 @@ access(all) contract SwapFactory {
             return self.lpTokenVaults.keys.length
         }
 
-        access(all) fun getLpTokenBalance(pairAddr: Address): UFix64 {
+        access(all) view fun getLpTokenBalance(pairAddr: Address): UFix64 {
             if self.lpTokenVaults.containsKey(pairAddr) {
                 let vaultRef = (&self.lpTokenVaults[pairAddr] as &{FungibleToken.Vault}?)!
                 return vaultRef.balance
@@ -230,11 +230,11 @@ access(all) contract SwapFactory {
             return 0.0
         }
 
-        access(all) fun getAllLPTokens(): [Address] {
+        access(all) view fun getAllLPTokens(): [Address] {
             return self.lpTokenVaults.keys
         }
 
-        access(all) fun getSlicedLPTokens(from: UInt64, to: UInt64): [Address] {
+        access(all) view fun getSlicedLPTokens(from: UInt64, to: UInt64): [Address] {
             pre {
                 from <= to && from < UInt64(self.getCollectionLength()):
                     SwapError.ErrorEncode(
@@ -244,18 +244,12 @@ access(all) contract SwapFactory {
             }
             let pairLen = UInt64(self.getCollectionLength())
             let endIndex = to >= pairLen ? pairLen - 1 : to
-            var curIndex = from
-            // Array.slice() is not supported yet.
-            let list: [Address] = []
-            while curIndex <= endIndex {
-                list.append(self.lpTokenVaults.keys[curIndex])
-                curIndex = curIndex + 1
-            }
-            return list
+            let upTo = endIndex + 1
+            return self.lpTokenVaults.keys.slice(from: Int(from), upTo: Int(upTo))
         }
     }
 
-    access(all) fun getPairAddress(token0Key: String, token1Key: String): Address? {
+    access(all) view fun getPairAddress(token0Key: String, token1Key: String): Address? {
         let pairExist0To1 = self.pairMap.containsKey(token0Key) && self.pairMap[token0Key]!.containsKey(token1Key)
         let pairExist1To0 = self.pairMap.containsKey(token1Key) && self.pairMap[token1Key]!.containsKey(token0Key)
         if (pairExist0To1 && pairExist1To0) {
@@ -265,7 +259,7 @@ access(all) contract SwapFactory {
         }
     }
 
-    access(all) fun getPairInfo(token0Key: String, token1Key: String): AnyStruct? {
+    access(all) view fun getPairInfo(token0Key: String, token1Key: String): AnyStruct? {
         var pairAddr = self.getPairAddress(token0Key: token0Key, token1Key: token1Key)
         if pairAddr == nil {
             return nil
@@ -273,12 +267,12 @@ access(all) contract SwapFactory {
         return getAccount(pairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!.getPairInfo()
     }
 
-    access(all) fun getAllPairsLength(): Int {
+    access(all) view fun getAllPairsLength(): Int {
         return self.pairs.length
     }
 
     /// Get sliced array of pair addresses (inclusive for both indexes)
-    access(all) fun getSlicedPairs(from: UInt64, to: UInt64): [Address] {
+    access(all) view fun getSlicedPairs(from: UInt64, to: UInt64): [Address] {
         pre {
             from <= to && from < UInt64(self.pairs.length):
                 SwapError.ErrorEncode(
@@ -288,24 +282,22 @@ access(all) contract SwapFactory {
         }
         let pairLen = UInt64(self.pairs.length)
         let endIndex = to >= pairLen ? pairLen - 1 : to
-        var curIndex = from
-        // Array.slice() is not supported yet.
-        let list: [Address] = []
-        while curIndex <= endIndex {
-            list.append(self.pairs[curIndex])
-            curIndex = curIndex + 1
-        }
-        return list
+        let upTo = endIndex + 1
+        return self.pairs.slice(from: Int(from), upTo: Int(upTo))
     }
 
     /// Get sliced array of PairInfos (inclusive for both indexes)
-    access(all) fun getSlicedPairInfos(from: UInt64, to: UInt64): [AnyStruct] {
+    /// Each element (AnyStruct) in the returned array is an array itself
+    access(all) view fun getSlicedPairInfos(from: UInt64, to: UInt64): [AnyStruct] {
         let pairSlice: [Address] = self.getSlicedPairs(from: from, to: to)
         var i = 0
         var res: [AnyStruct] = []
         while(i < pairSlice.length) {
-            res.append(
-                getAccount(pairSlice[i]).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!.getPairInfo()
+            // TODO: concat is a temp solution. Use map() once it's made as `view` function.
+            res = res.concat(
+                [
+                    getAccount(pairSlice[i]).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!.getPairInfo()
+                ]
             )
             i = i + 1
         }

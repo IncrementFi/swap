@@ -61,7 +61,7 @@ access(all) contract PierLPToken: MultiFungibleToken {
         //
         // @param amount The amount of tokens to withdraw
         // @return A new Vault (of the same token id) that contains the requested amount of tokens
-        access(all) fun withdraw(amount: UFix64): @PierLPToken.Vault {
+        access(MultiFungibleToken.Withdraw) fun withdraw(amount: UFix64): @PierLPToken.Vault {
             self.balance = self.balance - amount
             emit TokensWithdrawn(tokenId: self.tokenId, amount: amount, from: self.owner?.address)
             return <- create Vault(tokenId: self.tokenId, balance: amount)
@@ -94,12 +94,12 @@ access(all) contract PierLPToken: MultiFungibleToken {
         // @param tokenId The token id (pool id) of the Vault from which to withdraw
         // @param amount The amount of tokens to withdraw
         // @return A new Vault (of the same token id) that contains the requested amount of tokens
-        access(all) fun withdraw(tokenId: UInt64, amount: UFix64): @PierLPToken.Vault {
+        access(MultiFungibleToken.Withdraw) fun withdraw(tokenId: UInt64, amount: UFix64): @PierLPToken.Vault {
             if !self.vaults.containsKey(tokenId) {
                 self.vaults[tokenId] <-! PierLPToken.createEmptyVault(tokenId: tokenId)
             }
 
-            let vault = (&self.vaults[tokenId] as &PierLPToken.Vault?)!
+            let vault = (&self.vaults[tokenId] as auth(MultiFungibleToken.Withdraw) &PierLPToken.Vault?)!
             return <- vault.withdraw(amount: amount)
         }
 
@@ -149,7 +149,7 @@ access(all) contract PierLPToken: MultiFungibleToken {
         // @param tokenId The token id (pool id) of the Vault to query
         // @return A Vault reference of the requested token id, which exposes only
         //  the Receiver and View
-        access(all) fun getPublicVault(tokenId: UInt64):
+        access(all) view fun getPublicVault(tokenId: UInt64):
             &{MultiFungibleToken.Receiver, MultiFungibleToken.View}
         {
             return (&self.vaults[tokenId] as &{MultiFungibleToken.Receiver, MultiFungibleToken.View}?)!

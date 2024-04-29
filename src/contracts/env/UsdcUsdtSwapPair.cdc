@@ -234,23 +234,23 @@ access(all) contract UsdcUsdtSwapPair: FungibleToken {
     access(all) let token1Amount: UFix64
     access(all) let token2Amount: UFix64
 
-    init(token1Amount: UFix64, token2Amount: UFix64) {
+    view init(token1Amount: UFix64, token2Amount: UFix64) {
       self.token1Amount = token1Amount
       self.token2Amount = token2Amount
     }
   }
 
-  access(all) fun getFeePercentage(): UFix64 {
+  access(all) view fun getFeePercentage(): UFix64 {
     return 0.0
   }
 
   // Check current pool amounts
-  access(all) fun getPoolAmounts(): PoolAmounts {
+  access(all) view fun getPoolAmounts(): PoolAmounts {
     return PoolAmounts(token1Amount: UsdcUsdtSwapPair.token1Vault.balance, token2Amount: UsdcUsdtSwapPair.token2Vault.balance)
   }
 
   // Get quote for Token1 (given) -> Token2
-  access(all) fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
     pre {
       self.token2Vault.balance >= amount: "Not enough Token2 in the pool"
     }
@@ -260,7 +260,7 @@ access(all) contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Get quote for Token1 -> Token2 (given)
-  access(all) fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
     pre {
       self.token2Vault.balance >= amount: "Not enough Token2 in the pool"
     }
@@ -270,7 +270,7 @@ access(all) contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 (given) -> Token1
-  access(all) fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
     pre {
       self.token1Vault.balance >= amount: "Not enough Token1 in the pool"
     }
@@ -280,7 +280,7 @@ access(all) contract UsdcUsdtSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 -> Token1 (given)
-  access(all) fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
     pre {
       self.token1Vault.balance >= amount: "Not enough Token1 in the pool"
     }

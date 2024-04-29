@@ -28,7 +28,7 @@ transaction(
             :
             SwapFactory.getPairAddress(token0Key: token0Key, token1Key: token1Key) ?? panic("AddLiquidity: nonexistent pair ".concat(token0Key).concat(" <-> ").concat(token1Key).concat(", create pair first"))
         
-        let lpTokenCollectionRef = userAccount.storage.borrow<&SwapFactory.LpTokenCollection>(from: SwapConfig.LpTokenCollectionStoragePath)
+        let lpTokenCollectionRef = userAccount.storage.borrow<auth(FungibleToken.Withdraw) &SwapFactory.LpTokenCollection>(from: SwapConfig.LpTokenCollectionStoragePath)
             ?? panic("RemoveLiquidity: cannot borrow reference to LpTokenCollection")
 
         let lpTokenRemove <- lpTokenCollectionRef.withdraw(pairAddr: pairAddr, amount: lpTokenAmount)

@@ -40,7 +40,7 @@ access(all) contract interface IPierPair {
         access(all) let tokenBType: Type
 
         // returns [token A reserve, token B reserve]
-        access(all) fun getReserves(): [UFix64; 2]
+        access(all) view fun getReserves(): [UFix64; 2]
 
         // *** TWAP Information for Oracles ***
 

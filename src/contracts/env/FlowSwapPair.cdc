@@ -291,7 +291,7 @@ access(all) contract FlowSwapPair: FungibleToken {
     access(all) let token1Amount: UFix64
     access(all) let token2Amount: UFix64
 
-    init(token1Amount: UFix64, token2Amount: UFix64) {
+    view init(token1Amount: UFix64, token2Amount: UFix64) {
       self.token1Amount = token1Amount
       self.token2Amount = token2Amount
     }
@@ -301,17 +301,17 @@ access(all) contract FlowSwapPair: FungibleToken {
     return self.account.storage.copy<Bool>(from: /storage/proxyOnly) ?? false
   }
 
-  access(all) fun getFeePercentage(): UFix64 {
+  access(all) view fun getFeePercentage(): UFix64 {
     return self.feePercentage
   }
 
   // Check current pool amounts
-  access(all) fun getPoolAmounts(): PoolAmounts {
+  access(all) view fun getPoolAmounts(): PoolAmounts {
     return PoolAmounts(token1Amount: FlowSwapPair.token1Vault.balance, token2Amount: FlowSwapPair.token2Vault.balance)
   }
 
   // Get quote for Token1 (given) -> Token2
-  access(all) fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapExactToken1ForToken2(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     // token1Amount * token2Amount = token1Amount' * token2Amount' = (token1Amount + amount) * (token2Amount - quote)
@@ -321,7 +321,7 @@ access(all) contract FlowSwapPair: FungibleToken {
   }
 
   // Get quote for Token1 -> Token2 (given)
-  access(all) fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapToken1ForExactToken2(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     assert(poolAmounts.token2Amount > amount, message: "Not enough Token2 in the pool")
@@ -333,7 +333,7 @@ access(all) contract FlowSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 (given) -> Token1
-  access(all) fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapExactToken2ForToken1(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     // token1Amount * token2Amount = token1Amount' * token2Amount' = (token2Amount + amount) * (token1Amount - quote)
@@ -343,7 +343,7 @@ access(all) contract FlowSwapPair: FungibleToken {
   }
 
   // Get quote for Token2 -> Token1 (given)
-  access(all) fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
+  access(all) view fun quoteSwapToken2ForExactToken1(amount: UFix64): UFix64 {
     let poolAmounts = self.getPoolAmounts()
 
     assert(poolAmounts.token1Amount > amount, message: "Not enough Token1 in the pool")

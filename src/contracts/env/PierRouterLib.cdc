@@ -15,7 +15,7 @@ PierRouterLib provides utility functions for PierRouter,
 access(all) contract PierRouterLib {
 
     // Given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
-    access(all) fun quote(amountA: UFix64, reserveA: UFix64, reserveB: UFix64): UFix64 {
+    access(all) view fun quote(amountA: UFix64, reserveA: UFix64, reserveB: UFix64): UFix64 {
         pre {
             amountA > 0.0: "Metapier PierRouterLib: amountA cannot be 0"
             reserveA > 0.0 && reserveB > 0.0: "Metapier PierRouterLib: Insufficient liquidity"
@@ -87,7 +87,7 @@ access(all) contract PierRouterLib {
 
     // Returns the sorted reserve amounts of the pool according to 
     // the order of [tokenATypeIdentifier, tokenBTypeIdentifier]
-    access(all) fun getSortedReserves(
+    access(all) view fun getSortedReserves(
         pool: &{IPierPair.IPool}, 
         tokenATypeIdentifier: String, 
         tokenBTypeIdentifier: String
@@ -160,7 +160,7 @@ access(all) contract PierRouterLib {
     }
 
     // Given an input amount of an asset and pair reserves, returns the maximum output amount of the other asset
-    access(all) fun getAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
+    access(all) view fun getAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
         pre {
             amountIn > 0.0: "Metapier PierRouterLib: amountIn cannot be 0"
             reserveIn > 0.0 && reserveOut > 0.0: "Metapier PierRouterLib: Insufficient liquidity"
@@ -180,7 +180,7 @@ access(all) contract PierRouterLib {
     }
 
     // Given an output amount of an asset and pair reserves, returns a required input amount of the other asset
-    access(all) fun getAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
+    access(all) view fun getAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
         pre {
             amountOut > 0.0: "Metapier PierRouterLib: amountOut cannot be 0"
             reserveIn > 0.0 && reserveOut > 0.0: "Metapier PierRouterLib: Insufficient liquidity"

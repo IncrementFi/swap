@@ -20,7 +20,7 @@ access(all) contract PierMath {
     // Examples:
     //  1.23456789 -> 123456789
     //  1.00000000 -> 100000000
-    access(all) fun UFix64ToRawUInt256(_ n: UFix64): UInt256 {
+    access(all) view fun UFix64ToRawUInt256(_ n: UFix64): UInt256 {
         let fractionalPart = n % 1.0
         return UInt256(n) * self.scaleUI256 + UInt256(fractionalPart * self.scaleUF64)
     }
@@ -29,7 +29,7 @@ access(all) contract PierMath {
     // Examples:
     //  123456789 -> 1.23456789
     //  100000000 -> 1.00000000
-    access(all) fun rawUInt256ToUFix64(_ n: UInt256): UFix64 {
+    access(all) view fun rawUInt256ToUFix64(_ n: UInt256): UFix64 {
         let fractionalPart = n % self.scaleUI256
         return UFix64(n / self.scaleUI256) + UFix64(fractionalPart) / self.scaleUF64
     }
@@ -39,7 +39,7 @@ access(all) contract PierMath {
     //  0 -> 0
     //  4 -> 2
     //  5 -> 2
-    access(all) fun sqrt(_ x: UInt256): UInt256 {
+    access(all) view fun sqrt(_ x: UInt256): UInt256 {
         var z = x / 2 + 1
         var y = x
         while z < y {
@@ -56,7 +56,7 @@ access(all) contract PierMath {
     // @param reserve2 The reserve balance of token 2
     // @param timeElapsed The time elapsed since `lastPrice1Cumulative` was recorded
     // @return The new cumulative price for TWAP
-    access(all) fun computePriceCumulative(
+    access(all) view fun computePriceCumulative(
         lastPrice1Cumulative: Word64, 
         reserve1: UFix64, 
         reserve2: UFix64, 
@@ -75,7 +75,7 @@ access(all) contract PierMath {
     // Examples:
     //  0x1 -> 1
     //  0xf8d6e0586b0a20c7 -> 17930765636779778247
-    access(all) fun AddressToUInt64(address: Address): UInt64 {
+    access(all) view fun AddressToUInt64(address: Address): UInt64 {
         let addressBytes = address.toBytes()
         assert(addressBytes.length == 8, message: "Metapier PierMath: Address should be 64 bits")
 

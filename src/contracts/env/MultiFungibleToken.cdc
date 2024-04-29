@@ -9,6 +9,7 @@ of deploying multiple contracts. There are two cases to consider:
 
  */
 access(all) contract interface MultiFungibleToken {
+    access(all) entitlement Withdraw
 
     /// TokensInitialized
     ///
@@ -54,7 +55,7 @@ access(all) contract interface MultiFungibleToken {
         /// capability that allows all users to access the provider
         /// resource through a reference.
         ///
-        access(all) fun withdraw(tokenId: UInt64, amount: UFix64): @{Vault} {
+        access(Withdraw) fun withdraw(tokenId: UInt64, amount: UFix64): @{Vault} {
             post {
                 // `result` refers to the return value
                 result.balance == amount:
@@ -128,7 +129,7 @@ access(all) contract interface MultiFungibleToken {
         /// and returns a new Vault with the same token ID and
         /// the subtracted balance
         ///
-        access(all) fun withdraw(amount: UFix64): @{Vault} {
+        access(Withdraw) fun withdraw(amount: UFix64): @{Vault} {
             pre {
                 self.balance >= amount:
                     "Amount withdrawn must be less than or equal than the balance of the Vault"
@@ -185,7 +186,7 @@ access(all) contract interface MultiFungibleToken {
         /// public access, or throws an error if it doesn't
         /// have a vault of the requested token id
         ///
-        access(all) fun getPublicVault(tokenId: UInt64): &{Receiver, View} {
+        access(all) view fun getPublicVault(tokenId: UInt64): &{Receiver, View} {
             pre {
                 self.hasToken(tokenId: tokenId): "Vault of the given ID does not exist in the collection"
             }
@@ -197,7 +198,7 @@ access(all) contract interface MultiFungibleToken {
     ///
     access(all) resource interface Collection: Provider, Receiver, CollectionPublic {
 
-        access(all) fun withdraw(tokenId: UInt64, amount: UFix64): @{Vault}
+        access(Withdraw) fun withdraw(tokenId: UInt64, amount: UFix64): @{Vault}
 
         access(all) fun deposit(from: @{Vault})
 
@@ -205,7 +206,7 @@ access(all) contract interface MultiFungibleToken {
 
         access(all) view fun hasToken(tokenId: UInt64): Bool
 
-        access(all) fun getPublicVault(tokenId: UInt64): &{Receiver, View}
+        access(all) view fun getPublicVault(tokenId: UInt64): &{Receiver, View}
     }
 
     /// createEmptyCollection creates an empty Collection

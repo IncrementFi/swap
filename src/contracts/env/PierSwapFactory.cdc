@@ -42,7 +42,7 @@ access(all) contract PierSwapFactory {
     // @param tokenATypeIdentifier The type identifier of token A's vault (e.g., A.0x1654653399040a61.FlowToken.Vault)
     // @param tokenBTypeIdentifier The type identifier of token B's vault (e.g., A.0x3c5959b568896393.FUSD.Vault)
     // @return A unique hash string for the pair
-    access(self) fun getPairHash(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): String {
+    access(self) view fun getPairHash(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): String {
         // "\n" should be an invalid syntax for type identifier, thus making sure the raw id
         // is unique for each pair of type identifiers.
         let rawId = tokenATypeIdentifier.concat("\n").concat(tokenBTypeIdentifier)
@@ -50,7 +50,7 @@ access(all) contract PierSwapFactory {
     }
 
     // Returns the number of liquidity pools created so far
-    access(all) fun getPoolsSize(): Int {
+    access(all) view fun getPoolsSize(): Int {
         return self.pools.length
     }
 
@@ -60,7 +60,7 @@ access(all) contract PierSwapFactory {
     // @param index The index of the stored liquidity pool
     // @return The pool id representing the pool owner's address
     //  (in UInt64)
-    access(all) fun getPoolIdByIndex(index: UInt64): UInt64 {
+    access(all) view fun getPoolIdByIndex(index: UInt64): UInt64 {
         return self.pools[index]
     }
 
@@ -69,7 +69,7 @@ access(all) contract PierSwapFactory {
     //
     // @param poolId The pool id representing the pool owner's address
     // @return The resource reference of the requested liquidity pool
-    access(all) fun getPoolById(poolId: UInt64): &{IPierPair.IPool} {
+    access(all) view fun getPoolById(poolId: UInt64): &{IPierPair.IPool} {
         let address = Address(poolId)
         return getAccount(address).capabilities.borrow<&{IPierPair.IPool}>(self.SwapPoolPublicPath)
             ?? panic("Metapier PierSwapFactory: Couldn't borrow swap pool from the account")
@@ -80,7 +80,7 @@ access(all) contract PierSwapFactory {
     //
     // @param index The index of the stored liquidity pool
     // @return The resource reference of the requested liquidity pool
-    access(all) fun getPoolByIndex(index: UInt64): &{IPierPair.IPool} {
+    access(all) view fun getPoolByIndex(index: UInt64): &{IPierPair.IPool} {
         return self.getPoolById(poolId: self.pools[index])
     }
 
@@ -91,7 +91,7 @@ access(all) contract PierSwapFactory {
     // @param tokenBType The type of token B's vault
     // @return The resource reference of the requested liquidity pool, or nil
     //  if there's no liquidity pool for the token pair
-    access(all) fun getPoolByTypes(tokenAType: Type, tokenBType: Type): &{IPierPair.IPool}? {
+    access(all) view fun getPoolByTypes(tokenAType: Type, tokenBType: Type): &{IPierPair.IPool}? {
         let pairHash = self.getPairHash(
             tokenATypeIdentifier: tokenAType.identifier, 
             tokenBTypeIdentifier: tokenBType.identifier
@@ -110,7 +110,7 @@ access(all) contract PierSwapFactory {
     // @param tokenBTypeIdentifier The type identifier of token B's vault
     // @return The resource reference of the requested liquidity pool, or nil
     //  if there's no liquidity pool for the token pair
-    access(all) fun getPoolByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): &{IPierPair.IPool}? {
+    access(all) view fun getPoolByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): &{IPierPair.IPool}? {
         let pairHash = self.getPairHash(
             tokenATypeIdentifier: tokenATypeIdentifier, 
             tokenBTypeIdentifier: tokenBTypeIdentifier
@@ -129,7 +129,7 @@ access(all) contract PierSwapFactory {
     // @param tokenBTypeIdentifier The type identifier of token B's vault
     // @return The pool id of the requested liquidity pool, or nil if
     //  there's no liquidity pool for the token pair
-    access(all) fun getPoolIdByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): UInt64? {
+    access(all) view fun getPoolIdByTypeIdentifiers(tokenATypeIdentifier: String, tokenBTypeIdentifier: String): UInt64? {
         let pairHash = self.getPairHash(
             tokenATypeIdentifier: tokenATypeIdentifier, 
             tokenBTypeIdentifier: tokenBTypeIdentifier
