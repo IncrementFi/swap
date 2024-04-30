@@ -48,13 +48,11 @@ access(all) contract SwapPair: FungibleToken {
     /// Event that is emitted when lp tokens are destroyed
     access(all) event TokensBurned(amount: UFix64)
     /// Event that is emitted when liquidity is added
-    access(all) event LiquidityAdded(amount0: UFix64, amount1: UFix64)
+    access(all) event LiquidityAdded(amount0: UFix64, amount1: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
     /// Event that is emitted when liquidity is removed
-    access(all) event LiquidityRemoved(amount0: UFix64, amount1: UFix64)
+    access(all) event LiquidityRemoved(amount0: UFix64, amount1: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
     /// Event that is emitted when a swap trade happenes to this trading pair
-    /// direction: 0 - in self.token0 swapped to out self.token1
-    ///            1 - in self.token1 swapped to out self.token0
-    access(all) event Swap(inTokenAmount: UFix64, outTokenAmount: UFix64, direction: UInt8)
+    access(all) event Swap(amount0In: UFix64, amount1In: UFix64, amount0Out: UFix64, amount1Out: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
     /// Event that is emitted when a flashloan is originated from this SwapPair pool
     access(all) event Flashloan(executor: Address, executorType: Type, originator: Address, requestedTokenKey: String, amount: UFix64)
 
@@ -302,7 +300,11 @@ access(all) contract SwapPair: FungibleToken {
         }
         /// Mint lpTokens
         let lpTokenVault <-self.mintLpToken(amount: liquidity)
-        emit LiquidityAdded(amount0: amount0Added, amount1: amount1Added)
+        emit LiquidityAdded(
+            amount0: amount0Added, amount1: amount1Added,
+            reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance,
+            amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+        )
 
         if feeOn {
             self.rootKLast = self._rootK(balance0: self.token0Vault.balance, balance1: self.token1Vault.balance)
@@ -357,7 +359,11 @@ access(all) contract SwapPair: FungibleToken {
 
         /// Burn lpTokens
         self.burnLpToken(from: <- (lpTokenVault as! @SwapPair.Vault))
-        emit LiquidityRemoved(amount0: withdrawnToken0.balance, amount1: withdrawnToken1.balance)
+        emit LiquidityRemoved(
+            amount0: withdrawnToken0.balance, amount1: withdrawnToken1.balance,
+            reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance,
+            amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+        )
 
         if feeOn {
             self.rootKLast = self._rootK(balance0: self.token0Vault.balance, balance1: self.token1Vault.balance)
@@ -386,19 +392,20 @@ access(all) contract SwapPair: FungibleToken {
 
         self._update(reserve0Last: self.token0Vault.balance, reserve1Last: self.token1Vault.balance)
 
+        let amountIn = vaultIn.balance
         var amountOut = 0.0
         /// Calculate the swap result
         if (vaultIn.isInstance(self.token0VaultType)) {
             if self.isStableSwap() {
-                amountOut = SwapConfig.getAmountOutStable(amountIn: vaultIn.balance, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, p: self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutStable(amountIn: amountIn, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, p: self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
             } else {
-                amountOut = SwapConfig.getAmountOutVolatile(amountIn: vaultIn.balance, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutVolatile(amountIn: amountIn, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
             }
         } else {
             if self.isStableSwap() {
-                amountOut = SwapConfig.getAmountOutStable(amountIn: vaultIn.balance, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, p: 1.0/self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutStable(amountIn: amountIn, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, p: 1.0/self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
             } else {
-                amountOut = SwapConfig.getAmountOutVolatile(amountIn: vaultIn.balance, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutVolatile(amountIn: amountIn, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
             }
         }
         /// Check and swap exact output amount if specified in argument
@@ -413,15 +420,23 @@ access(all) contract SwapPair: FungibleToken {
         }
 
         if (vaultIn.isInstance(self.token0VaultType)) {
-            emit Swap(inTokenAmount: vaultIn.balance, outTokenAmount: amountOut, direction: 0)
             self.token0Vault.deposit(from: <-vaultIn)
-
+            emit Swap(
+                amount0In: amountIn, amount1In: 0.0,
+                amount0Out: 0.0, amount1Out: amountOut,
+                reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance - amountOut,
+                amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+            )
             self.lock = false
             return <- self.token1Vault.withdraw(amount: amountOut)
         } else {
-            emit Swap(inTokenAmount: vaultIn.balance, outTokenAmount: amountOut, direction: 1)
             self.token1Vault.deposit(from: <-vaultIn)
-
+            emit Swap(
+                amount0In: 0.0, amount1In: amountIn,
+                amount0Out: amountOut, amount1Out: 0.0,
+                reserve0After: self.token0Vault.balance - amountOut, reserve1After: self.token1Vault.balance,
+                amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+            )
             self.lock = false
             return <- self.token0Vault.withdraw(amount: amountOut)
         }
