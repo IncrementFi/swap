@@ -54,7 +54,7 @@ access(all) contract SwapPair: FungibleToken {
     /// Event that is emitted when a swap trade happenes to this trading pair
     access(all) event Swap(amount0In: UFix64, amount1In: UFix64, amount0Out: UFix64, amount1Out: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
     /// Event that is emitted when a flashloan is originated from this SwapPair pool
-    access(all) event Flashloan(executor: Address, executorType: Type, originator: Address, requestedTokenKey: String, amount: UFix64)
+    access(all) event Flashloan(executor: Address, executorType: Type, originator: Address, requestedTokenType: String, requestedAmount: UFix64, reserve0After: UFix64, reserve1After: UFix64)
 
     /// Lptoken Vault
     ///
@@ -303,7 +303,7 @@ access(all) contract SwapPair: FungibleToken {
         emit LiquidityAdded(
             amount0: amount0Added, amount1: amount1Added,
             reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance,
-            amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+            amount0Type: self.token0Key, amount1Type: self.token1Key
         )
 
         if feeOn {
@@ -362,7 +362,7 @@ access(all) contract SwapPair: FungibleToken {
         emit LiquidityRemoved(
             amount0: withdrawnToken0.balance, amount1: withdrawnToken1.balance,
             reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance,
-            amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+            amount0Type: self.token0Key, amount1Type: self.token1Key
         )
 
         if feeOn {
@@ -425,7 +425,7 @@ access(all) contract SwapPair: FungibleToken {
                 amount0In: amountIn, amount1In: 0.0,
                 amount0Out: 0.0, amount1Out: amountOut,
                 reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance - amountOut,
-                amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+                amount0Type: self.token0Key, amount1Type: self.token1Key
             )
             self.lock = false
             return <- self.token1Vault.withdraw(amount: amountOut)
@@ -435,7 +435,7 @@ access(all) contract SwapPair: FungibleToken {
                 amount0In: 0.0, amount1In: amountIn,
                 amount0Out: amountOut, amount1Out: 0.0,
                 reserve0After: self.token0Vault.balance - amountOut, reserve1After: self.token1Vault.balance,
-                amount0Type: self.token0VaultType.identifier, amount1Type: self.token1VaultType.identifier
+                amount0Type: self.token0Key, amount1Type: self.token1Key
             )
             self.lock = false
             return <- self.token0Vault.withdraw(amount: amountOut)
@@ -496,7 +496,15 @@ access(all) contract SwapPair: FungibleToken {
             self.token1Vault.deposit(from: <- tokenIn)
         }
 
-        emit Flashloan(executor: executor.owner!.address, executorType: executor.getType(), originator: self.account.address, requestedTokenKey: requestedTokenVaultType == self.token0VaultType ? self.token0Key : self.token1Key, amount: requestedAmount)
+        emit Flashloan(
+            executor: executor.owner!.address,
+            executorType: executor.getType(),
+            originator: self.account.address,
+            requestedTokenType: requestedTokenVaultType == self.token0VaultType ? self.token0Key : self.token1Key,
+            requestedAmount: requestedAmount,
+            reserve0After: self.token0Vault.balance,
+            reserve1After: self.token1Vault.balance
+        )
 
         self.lock = false
     }
