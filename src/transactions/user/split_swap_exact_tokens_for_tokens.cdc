@@ -32,8 +32,8 @@ transaction(
         if tokenOutReceiverRef == nil {
             let token1AddrStr = Token1Addr.toString()
             let token1AddrStr0xTrimmed = token1AddrStr.slice(from: 2, upTo: token1AddrStr.length)
-            let token1RuntimeType = CompositeType("A.".concat(token1AddrStr0xTrimmed).concat(".").concat(Token1Name)) ?? panic("token1 get runtime type fail")
-            userAccount.storage.save(<-getAccount(Token1Addr).contracts.borrow<&{FungibleToken}>(name: Token1Name)!.createEmptyVault(vaultType: token1RuntimeType), to: tokenOutVaultPath)
+            let token1VaultRuntimeType = CompositeType("A.".concat(token1AddrStr0xTrimmed).concat(".").concat(Token1Name).concat(".Vault")) ?? panic("token1 get runtime type fail")
+            userAccount.storage.save(<-getAccount(Token1Addr).contracts.borrow<&{FungibleToken}>(name: Token1Name)!.createEmptyVault(vaultType: token1VaultRuntimeType), to: tokenOutVaultPath)
             userAccount.capabilities.publish(
                 userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath),
                 at: tokenOutReceiverPath

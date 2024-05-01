@@ -58,9 +58,9 @@ transaction(
         if tokenOutReceiverRef == nil {
             let outTokenAddrStr = swapOutTokenAddress.toString()
             let outTokenAddrStr0xTrimmed = outTokenAddrStr.slice(from: 2, upTo: outTokenAddrStr.length)
-            /// e.g.: "A.1654653399040a61.FlowToken"
-            let outTokenRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(swapOutTokenName)) ?? panic("outToken get runtime type fail")
-            userAccount.storage.save(<-getAccount(swapOutTokenAddress).contracts.borrow<&{FungibleToken}>(name: swapOutTokenName)!.createEmptyVault(vaultType: outTokenRuntimeType), to: tokenOutVaultPath)
+            /// e.g.: "A.1654653399040a61.FlowToken.Vault"
+            let outTokenVaultRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(swapOutTokenName).concat(".Vault")) ?? panic("outToken get runtime type fail")
+            userAccount.storage.save(<-getAccount(swapOutTokenAddress).contracts.borrow<&{FungibleToken}>(name: swapOutTokenName)!.createEmptyVault(vaultType: outTokenVaultRuntimeType), to: tokenOutVaultPath)
             userAccount.capabilities.publish(
                 userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath),
                 at: tokenOutReceiverPath
@@ -105,9 +105,9 @@ transaction(
 
                     let outTokenAddrStr = tokenOutAddress.toString()
                     let outTokenAddrStr0xTrimmed = outTokenAddrStr.slice(from: 2, upTo: outTokenAddrStr.length)
-                    /// e.g.: "A.1654653399040a61.FlowToken"
-                    let outTokenRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(tokenOutName)) ?? panic("outToken get runtime type fail")
-                    var poolOutVault <- getAccount(tokenOutAddress).contracts.borrow<&{FungibleToken}>(name: tokenOutName)!.createEmptyVault(vaultType: outTokenRuntimeType)
+                    /// e.g.: "A.1654653399040a61.FlowToken.Vault"
+                    let outTokenVaultRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(tokenOutName).concat(".Vault")) ?? panic("outToken get runtime type fail")
+                    var poolOutVault <- getAccount(tokenOutAddress).contracts.borrow<&{FungibleToken}>(name: tokenOutName)!.createEmptyVault(vaultType: outTokenVaultRuntimeType)
 
                     // swap in pool
                     while(poolIndex < poolLength) {
