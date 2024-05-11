@@ -314,8 +314,7 @@ access(all) contract SwapFactory {
         }
         access(all) fun setFeeTo(feeToAddr: Address) {
             let lpTokenCollectionCap = getAccount(feeToAddr).capabilities.get<&{SwapInterfaces.LpTokenCollectionPublic}>(SwapConfig.LpTokenCollectionPublicPath)
-            assert(
-                lpTokenCollectionCap != nil && lpTokenCollectionCap!.check(), message:
+            assert(lpTokenCollectionCap.check(), message:
                 SwapError.ErrorEncode(
                     msg: "SwapFactory: feeTo account not properly setup with LpTokenCollection resource",
                     err: SwapError.ErrorCode.LOST_PUBLIC_CAPABILITY

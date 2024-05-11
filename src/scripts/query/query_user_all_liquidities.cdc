@@ -5,10 +5,10 @@ import SwapInterfaces from "../../contracts/SwapInterfaces.cdc"
 access(all) fun main(userAddr: Address): {Address: UFix64}? {
     var lpTokenCollectionPublicPath = SwapConfig.LpTokenCollectionPublicPath
     let lpTokenCollectionCap = getAccount(userAddr).capabilities.get<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionPublicPath)
-    if lpTokenCollectionCap == nil || lpTokenCollectionCap!.check() == false {
+    if lpTokenCollectionCap.check() == false {
         return nil
     }
-    let lpTokenCollectionRef = lpTokenCollectionCap!.borrow()!
+    let lpTokenCollectionRef = lpTokenCollectionCap.borrow()!
     let liquidityPairAddrs = lpTokenCollectionRef.getAllLPTokens()
     var res: {Address: UFix64} = {}
     for pairAddr in liquidityPairAddrs {
