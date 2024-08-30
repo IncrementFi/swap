@@ -5,20 +5,20 @@
 # Author: Increment Labs
 
 */
-import FungibleToken from "./tokens/FungibleToken.cdc"
+import FungibleToken from "./env/FungibleToken.cdc"
 import SwapFactory from "./SwapFactory.cdc"
 import SwapConfig from "./SwapConfig.cdc"
 import SwapError from "./SwapError.cdc"
 import SwapInterfaces from "./SwapInterfaces.cdc"
 
-pub contract SwapRouter {
+access(all) contract SwapRouter {
     /// Perform a chained swap calculation starting with exact amountIn
     ///
     /// @Param  - amountIn:     e.g. 50.0
     /// @Param  - tokenKeyPath: e.g. [A.f8d6e0586b0a20c7.FUSD, A.f8d6e0586b0a20c7.FlowToken, A.f8d6e0586b0a20c7.USDC]
     /// @Return - [UFix64]:     e.g. [50.0, 10.0, 48.0]
     ///
-    pub fun getAmountsOut(amountIn: UFix64, tokenKeyPath: [String]): [UFix64] {
+    access(all) fun getAmountsOut(amountIn: UFix64, tokenKeyPath: [String]): [UFix64] {
         pre {
             tokenKeyPath.length >= 2: SwapError.ErrorEncode(msg: "SwapRouter: Invalid path", err: SwapError.ErrorCode.INVALID_PARAMETERS)
         }
@@ -37,7 +37,7 @@ pub contract SwapRouter {
                 )
             )
             
-            let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow() ?? panic(
+            let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath) ?? panic(
                 SwapError.ErrorEncode(
                     msg: "SwapRouter: Lost SwapPair public capability",
                     err: SwapError.ErrorCode.LOST_PUBLIC_CAPABILITY
@@ -54,7 +54,7 @@ pub contract SwapRouter {
 
     /// Perform a chained swap calculation end with exact amountOut
     ///
-    pub fun getAmountsIn(amountOut: UFix64, tokenKeyPath: [String]): [UFix64] {
+    access(all) fun getAmountsIn(amountOut: UFix64, tokenKeyPath: [String]): [UFix64] {
         pre {
             tokenKeyPath.length >= 2: SwapError.ErrorEncode(msg: "SwapRouter: Invalid path", err: SwapError.ErrorCode.INVALID_PARAMETERS)
         }
@@ -73,7 +73,7 @@ pub contract SwapRouter {
                 )
             )
             
-            let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow() ?? panic(
+            let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath) ?? panic(
                 SwapError.ErrorEncode(
                     msg: "SwapRouter: Lost SwapPair public capability",
                     err: SwapError.ErrorCode.LOST_PUBLIC_CAPABILITY
@@ -99,12 +99,12 @@ pub contract SwapRouter {
     /// @Param  - deadline:     The timeout block timestamp for the transaction
     /// @Return - Vault:        outVault
     ///
-    pub fun swapExactTokensForTokens(
-        exactVaultIn: @FungibleToken.Vault,
+    access(all) fun swapExactTokensForTokens(
+        exactVaultIn: @{FungibleToken.Vault},
         amountOutMin: UFix64,
         tokenKeyPath: [String],
         deadline: UFix64
-    ): @FungibleToken.Vault {
+    ): @{FungibleToken.Vault} {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "SwapRouter: expired",
@@ -131,12 +131,12 @@ pub contract SwapRouter {
     /// @Param  - deadline:       The timeout block timestamp for the transaction
     /// @Return - [OutVault, RemainingInVault]
     ///
-    pub fun swapTokensForExactTokens(
-        vaultInMax: @FungibleToken.Vault,
+    access(all) fun swapTokensForExactTokens(
+        vaultInMax: @{FungibleToken.Vault},
         exactAmountOut: UFix64,
         tokenKeyPath: [String],
         deadline: UFix64
-    ): @[FungibleToken.Vault] {
+    ): @[{FungibleToken.Vault}] {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "SwapRouter: expired",
@@ -158,7 +158,7 @@ pub contract SwapRouter {
 
     /// SwapWithPath
     ///
-    pub fun swapWithPath(vaultIn: @FungibleToken.Vault, tokenKeyPath: [String], exactAmounts: [UFix64]?): @FungibleToken.Vault {
+    access(all) fun swapWithPath(vaultIn: @{FungibleToken.Vault}, tokenKeyPath: [String], exactAmounts: [UFix64]?): @{FungibleToken.Vault} {
         pre {
             tokenKeyPath.length >= 2: SwapError.ErrorEncode(msg: "Invalid path.", err: SwapError.ErrorCode.INVALID_PARAMETERS)
         }
@@ -194,14 +194,16 @@ pub contract SwapRouter {
         var index = 4
         var curVaultOut <- vaultOut4
         while(index < tokenKeyPath.length-1) {
-            var in <- curVaultOut.withdraw(amount: curVaultOut.balance)
+            var inVault <- curVaultOut.withdraw(amount: curVaultOut.balance)
             
             var exactAmountOut: UFix64? = nil
             if exactAmounts != nil { exactAmountOut = exactAmounts![index+1] }
-            var out <- self.swapWithPair(vaultIn: <- in, exactAmountOut: exactAmountOut, token0Key: tokenKeyPath[index], token1Key:tokenKeyPath[index+1])
-            curVaultOut <-> out
+            var outVault <- self.swapWithPair(vaultIn: <- inVault, exactAmountOut: exactAmountOut, token0Key: tokenKeyPath[index], token1Key:tokenKeyPath[index+1])
+/// TODO: get rid of resource swap operator until the potential issue is fixed by Cadence team
+/// TODO: check if the issue has been fixed on previewnet
+            curVaultOut <-> outVault
 
-            destroy out
+            destroy outVault
             index = index + 1
         }
     
@@ -210,14 +212,19 @@ pub contract SwapRouter {
 
     /// SwapWithPair
     ///
-    pub fun swapWithPair(
-        vaultIn: @FungibleToken.Vault,
+    access(all) fun swapWithPair(
+        vaultIn: @{FungibleToken.Vault},
         exactAmountOut: UFix64?,
         token0Key: String,
         token1Key: String
-    ): @FungibleToken.Vault {
+    ): @{FungibleToken.Vault} {
         let pairAddr = SwapFactory.getPairAddress(token0Key: token0Key, token1Key: token1Key)!
-        let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+        let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath) ?? panic(
+            SwapError.ErrorEncode(
+                    msg: "SwapRouter: Lost SwapPair public capability",
+                    err: SwapError.ErrorCode.LOST_PUBLIC_CAPABILITY
+                )
+        )
         return <- pairPublicRef.swap(vaultIn: <- vaultIn, exactAmountOut: exactAmountOut)
     }
 }

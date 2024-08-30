@@ -1,6 +1,5 @@
-import FUSD from 0xe223d8a629e49c68
-
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FUSD from "../../contracts/tokens/FUSD.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapRouter from "../../contracts/SwapRouter.cdc"
 
 transaction(
@@ -9,7 +8,7 @@ transaction(
     amountOutMin: UFix64,
     deadline: UFix64
 ) {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
         let len = tokenKeyPath.length
         let tokenInKey = tokenKeyPath[0]
         let tokenOutKey = tokenKeyPath[len-1]
@@ -20,16 +19,18 @@ transaction(
         let tokenOutReceiverPath = /public/fusdReceiver
         let tokenOutBalancePath = /public/fusdBalance
 
-        var tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+        var tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         if tokenOutReceiverRef == nil {
-            userAccount.save(<- FUSD.createEmptyVault(), to: /storage/fusdVault)
-            userAccount.link<&FUSD.Vault{FungibleToken.Receiver}>(tokenOutReceiverPath, target: tokenOutVaultPath)
-            userAccount.link<&FUSD.Vault{FungibleToken.Balance}>(tokenOutBalancePath, target: tokenOutVaultPath)
+            userAccount.storage.save(<- FUSD.createEmptyVault(vaultType: Type<@FUSD.Vault>()), to: /storage/fusdVault)
+            let receiverCapability = userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath)
+            userAccount.capabilities.publish(receiverCapability, at: tokenOutReceiverPath)
+            let balanceCapability = userAccount.capabilities.storage.issue<&{FungibleToken.Balance}>(tokenOutVaultPath)
+            userAccount.capabilities.publish(balanceCapability, at: tokenOutBalancePath)
 
-            tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+            tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         }
 
-        let exactVaultIn <- userAccount.borrow<&FungibleToken.Vault>(from: tokenInVaultPath)!.withdraw(amount: exactAmountIn)
+        let exactVaultIn <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: tokenInVaultPath)!.withdraw(amount: exactAmountIn)
         /// 
         let vaultOut <- SwapRouter.swapExactTokensForTokens(
             exactVaultIn: <-exactVaultIn,

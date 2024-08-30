@@ -1,4 +1,4 @@
-import FungibleToken from "../tokens/FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
 import PierPair from "./PierPair.cdc" // 0x609e10301860b683
 import IPierPair from "./IPierPair.cdc"
 import PierSwapFactory from "./PierSwapFactory.cdc"
@@ -13,22 +13,18 @@ Slippage and deadline are provided as safety guards.
 @author Metapier Foundation Ltd.
 
  */
-pub contract PierRouter {
+access(all) contract PierRouter {
 
     // AddLPResult is a resource that stores the result of `addLiquidity`
-    pub resource AddLPResult {
+    access(all) resource AddLPResult {
         // the amounts of tokens actually provided, in the order of [token A, token B]
-        pub let amountsProvided: [UFix64; 2]
-        // the LP tokens representing the share of pool of the provided liquidity 
-        pub(set) var vaultLP: @PierLPToken.Vault
+        access(all) let amountsProvided: [UFix64; 2]
+        // the LP tokens representing the share of pool of the provided liquidity
+        access(all) var vaultLP: @PierLPToken.Vault
 
         init(amountsProvided: [UFix64; 2], vaultLP: @PierLPToken.Vault) {
             self.amountsProvided = amountsProvided
             self.vaultLP <- vaultLP
-        }
-
-        destroy() {
-            destroy self.vaultLP
         }
     }
 
@@ -45,14 +41,14 @@ pub contract PierRouter {
     // @param amountBMin The minimum amount of token B to provide (lower bound)
     // @param deadline The deadline for this function to be executed
     // @return An AddLPResult resource containing amounts provided info and the minted LP tokens
-    pub fun addLiquidity(
-        pool: &PierPair.Pool{IPierPair.IPool},
-        vaultA: &FungibleToken.Vault, 
-        vaultB: &FungibleToken.Vault, 
-        amountADesired: UFix64, 
-        amountBDesired: UFix64, 
-        amountAMin: UFix64, 
-        amountBMin: UFix64, 
+    access(all) fun addLiquidity(
+        pool: &{IPierPair.IPool},
+        vaultA: auth(FungibleToken.Withdraw) &{FungibleToken.Vault},
+        vaultB: auth(FungibleToken.Withdraw) &{FungibleToken.Vault},
+        amountADesired: UFix64,
+        amountBDesired: UFix64,
+        amountAMin: UFix64,
+        amountBMin: UFix64,
         deadline: UFix64
     ): @AddLPResult {
         pre {
@@ -123,12 +119,12 @@ pub contract PierRouter {
     // @param amountBMin The minimum amount of token B to receive
     // @param deadline The deadline for this function to be executed
     // @return [amount of token A redeemed, amount of token B redeemed]
-    pub fun removeLiquidity(
-        vaultA: &{FungibleToken.Receiver}, 
-        vaultB: &{FungibleToken.Receiver}, 
-        vaultLP: @PierLPToken.Vault, 
-        amountAMin: UFix64, 
-        amountBMin: UFix64, 
+    access(all) fun removeLiquidity(
+        vaultA: &{FungibleToken.Receiver},
+        vaultB: &{FungibleToken.Receiver},
+        vaultLP: @PierLPToken.Vault,
+        amountAMin: UFix64,
+        amountBMin: UFix64,
         deadline: UFix64
     ): [UFix64; 2] {
         pre {
@@ -165,12 +161,12 @@ pub contract PierRouter {
     // @param path The path to follow for this swap. E.g., [A.0x01.TokenA, A.0x02.TokenB, A.0x03.TokenC]
     // @param deadline The deadline for this swap to execute
     // @return The actual amount of token B out
-    pub fun swapExactTokensAForTokensB(
-        fromVault: &FungibleToken.Vault, 
-        toVault: &{FungibleToken.Receiver}, 
-        amountIn: UFix64, 
-        amountOutMin: UFix64, 
-        path: [String], 
+    access(all) fun swapExactTokensAForTokensB(
+        fromVault: auth(FungibleToken.Withdraw) &{FungibleToken.Vault},
+        toVault: &{FungibleToken.Receiver},
+        amountIn: UFix64,
+        amountOutMin: UFix64,
+        path: [String],
         deadline: UFix64
     ): UFix64 {
         pre {
@@ -207,12 +203,12 @@ pub contract PierRouter {
     // @param path The path to follow for this swap. E.g., [A.0x01.TokenA, A.0x02.TokenB, A.0x03.TokenC]
     // @param deadline The deadline for this swap to execute
     // @return The actual amount of token A in
-    pub fun swapTokensAForExactTokensB(
-        fromVault: &FungibleToken.Vault, 
-        toVault: &{FungibleToken.Receiver}, 
-        amountInMax: UFix64, 
-        amountOut: UFix64, 
-        path: [String], 
+    access(all) fun swapTokensAForExactTokensB(
+        fromVault: auth(FungibleToken.Withdraw) &{FungibleToken.Vault},
+        toVault: &{FungibleToken.Receiver},
+        amountInMax: UFix64,
+        amountOut: UFix64,
+        path: [String],
         deadline: UFix64
     ): UFix64 {
         pre {
@@ -238,4 +234,4 @@ pub contract PierRouter {
 
         return amountIn   
     }
-} 
+}

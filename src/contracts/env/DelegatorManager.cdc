@@ -2,17 +2,17 @@
     A mock DelegatorManager to make SwapPair_Flow_stFlow compilable
 */
 
-pub contract DelegatorManager {
+access(all) contract DelegatorManager {
     access(self) let epochSnapshotHistory: {UInt64: EpochSnapshot}
-    pub var quoteEpochCounter: UInt64 
+    access(all) var quoteEpochCounter: UInt64 
 
-    pub struct EpochSnapshot {
-        // Snapshotted protocol epoch                                           
-        pub let epochCounter: UInt64
+    access(all) struct EpochSnapshot {
+        /// Snapshotted protocol epoch                                           
+        access(all) let epochCounter: UInt64
         /// Price: stFlow to Flow (>= 1.0)                                      
-        pub var scaledQuoteStFlowFlow: UInt256                                   
+        access(all) var scaledQuoteStFlowFlow: UInt256                                   
         /// Price: Flow to stFlow (<= 1.0)                                      
-        pub var scaledQuoteFlowStFlow: UInt256 
+        access(all) var scaledQuoteFlowStFlow: UInt256 
 
         init(epochCounter: UInt64) {
             self.epochCounter = epochCounter
@@ -21,11 +21,11 @@ pub contract DelegatorManager {
         }
     }
 
-    pub fun borrowEpochSnapshot(at: UInt64): &EpochSnapshot {                   
+    access(all) view fun borrowEpochSnapshot(at: UInt64): &EpochSnapshot {                   
         return (&self.epochSnapshotHistory[at] as &EpochSnapshot?) ?? panic("EpochSnapshot index out of range")                                                                                           
     }
 
-    pub fun borrowCurrentQuoteEpochSnapshot(): &EpochSnapshot {                                                                                                                                           
+    access(all) view fun borrowCurrentQuoteEpochSnapshot(): &EpochSnapshot {                                                                                                                                           
         return self.borrowEpochSnapshot(at: self.quoteEpochCounter)                 
     }
 

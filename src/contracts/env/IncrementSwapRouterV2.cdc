@@ -16,21 +16,21 @@
 */
 import DexSyncSwap from "./DexSyncSwap.cdc"
 
-import FungibleToken from "./tokens/FungibleToken.cdc"
-import SwapFactory from "./SwapFactory.cdc"
-import StableSwapFactory from "./StableSwapFactory.cdc"
-import SwapInterfaces from "./SwapInterfaces.cdc"
-import SwapConfig from "./SwapConfig.cdc"
-import SwapError from "./SwapError.cdc"
+import FungibleToken from "./FungibleToken.cdc"
+import SwapFactory from "../SwapFactory.cdc"
+import StableSwapFactory from "../StableSwapFactory.cdc"
+import SwapInterfaces from "../SwapInterfaces.cdc"
+import SwapConfig from "../SwapConfig.cdc"
+import SwapError from "../SwapError.cdc"
 
-pub contract IncrementSwapRouterV2 {
+access(all) contract IncrementSwapRouterV2 {
 
     /// Flow Pool-Based DEX Swap Standards
-    pub let immediateSwapQuotation: @ImmediateSwapQuotation
-    pub let immediateSwap: @ImmediateSwap
+    access(all) let immediateSwapQuotation: @ImmediateSwapQuotation
+    access(all) let immediateSwap: @ImmediateSwap
 
     /// 
-    pub resource ImmediateSwapQuotation: DexSyncSwap.ImmediateSwapQuotation {
+    access(all) resource ImmediateSwapQuotation: DexSyncSwap.ImmediateSwapQuotation {
         /// @notice Provides the quotation of the target token amount for the
         /// corresponding provided sell amount i.e amount of source tokens.
         ///
@@ -48,7 +48,7 @@ pub contract IncrementSwapRouterV2 {
         /// @param sourceAmount Amount of source token user wants to sell to buy target token.
         /// @return Amount of target token user would get after selling `sourceAmount`.
         ///
-        pub fun getExactSellQuoteUsingPath(
+        access(all) fun getExactSellQuoteUsingPath(
             sourceToTargetTokenPath: [Type],
             sourceAmount: UFix64
         ): UFix64? {
@@ -74,7 +74,7 @@ pub contract IncrementSwapRouterV2 {
         /// @param targetAmount: Amount of target token user wants to buy.
         /// @return Amount of source token user has to pay to buy provided `targetAmount` of target token.
         ///
-        pub fun getExactBuyQuoteUsingPath(
+        access(all) fun getExactBuyQuoteUsingPath(
             sourceToTargetTokenPath: [Type],
             targetAmount: UFix64
         ): UFix64? {
@@ -85,12 +85,12 @@ pub contract IncrementSwapRouterV2 {
 
     }
 
-    pub fun createImmediateSwapQuotation(): @ImmediateSwapQuotation {
+    access(all) fun createImmediateSwapQuotation(): @ImmediateSwapQuotation {
         return <- create ImmediateSwapQuotation()
     }
 
     ///
-    pub resource ImmediateSwap: DexSyncSwap.ImmediateSwap {
+    access(all) resource ImmediateSwap: DexSyncSwap.ImmediateSwap {
 
         /// @notice It will Swap the source token for the target token, In the below API, provided `sourceVault` would be consumed fully
         ///
@@ -117,9 +117,9 @@ pub contract IncrementSwapRouterV2 {
         /// @param expiry:                     Unix timestamp after which trade would get invalidated.
         /// @param recipient:                  A valid capability that receives target token after the completion of function execution.
         /// @return receivedTargetTokenAmount: Amount of tokens user would received after the swap
-        pub fun swapExactSourceToTargetTokenUsingPath(
+        access(all) fun swapExactSourceToTargetTokenUsingPath(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             minimumTargetTokenAmount: UFix64,
             expiry: UFix64,
             recipient: Capability<&{FungibleToken.Receiver}>,
@@ -165,12 +165,12 @@ pub contract IncrementSwapRouterV2 {
         ///                                  then function execution would throw a error.
         /// @param expiry:                   Unix timestamp after which trade would get invalidated.
         /// @return A valid vault that holds target token and an optional vault that may hold leftover source tokens.
-        pub fun swapExactSourceToTargetTokenUsingPathAndReturn(
+        access(all) fun swapExactSourceToTargetTokenUsingPathAndReturn(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             minimumTargetTokenAmount: UFix64,
             expiry: UFix64
-        ): @FungibleToken.Vault {
+        ): @{FungibleToken.Vault} {
             let tokenKeyPath: [String] = IncrementSwapRouterV2.convertTypeListToIdentifierList(typeList: sourceToTargetTokenPath)
             let sourceTokenAmount = sourceVault.balance
             
@@ -209,13 +209,13 @@ pub contract IncrementSwapRouterV2 {
         /// @param expiry:                     Unix timestamp after which trade would get invalidated.
         /// @param recipient:                  A valid capability that receives target token after the completion of function execution.
         /// @param remainingSourceTokenRecipient: A valid capability that receives surplus source token after the completion of function execution.
-        pub fun swapSourceToExactTargetTokenUsingPath(
+        access(all) fun swapSourceToExactTargetTokenUsingPath(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             exactTargetAmount: UFix64,
             expiry: UFix64,
             recipient: Capability<&{FungibleToken.Receiver}>,
-            remainingSourceTokenRecipient: Capability<&{FungibleToken.Receiver, FungibleToken.Balance}>
+            remainingSourceTokenRecipient: Capability<&{FungibleToken.Receiver}>
         ): UFix64 {
             let tokenKeyPath: [String] = IncrementSwapRouterV2.convertTypeListToIdentifierList(typeList: sourceToTargetTokenPath)
             let sourceTokenAmount = sourceVault.balance
@@ -265,9 +265,9 @@ pub contract IncrementSwapRouterV2 {
         ///     The way to unpack the return vault:
         ///         let targetVault <- res.targetTokenVault.withdraw(amount: res.targetTokenVault.balance)
         ///         let remainingVault <- res.remainingSourceTokenVault?.withdraw(amount: res.remainingSourceTokenVault?.balance!)!
-        pub fun swapSourceToExactTargetTokenUsingPathAndReturn(
+        access(all) fun swapSourceToExactTargetTokenUsingPathAndReturn(
             sourceToTargetTokenPath: [Type],
-            sourceVault: @FungibleToken.Vault,
+            sourceVault: @{FungibleToken.Vault},
             exactTargetAmount: UFix64,
             expiry: UFix64
         ): @{DexSyncSwap.ExactSwapAndReturnValue} {
@@ -290,11 +290,12 @@ pub contract IncrementSwapRouterV2 {
         }
     }
     
-    pub resource ExactSwapAndReturnValue: DexSyncSwap.ExactSwapAndReturnValue {
-        pub let targetTokenVault: @FungibleToken.Vault
-        pub let remainingSourceTokenVault: @FungibleToken.Vault?
-        pub let remainingSourceTokenVaultAmount: UFix64
-        init(targetTokenVault: @FungibleToken.Vault, remainingSourceTokenVault: @FungibleToken.Vault?) {
+    access(all) resource ExactSwapAndReturnValue: DexSyncSwap.ExactSwapAndReturnValue {
+        access(all) let targetTokenVault: @{FungibleToken.Vault}
+        access(all) let remainingSourceTokenVault: @{FungibleToken.Vault}?
+        access(all) let remainingSourceTokenVaultAmount: UFix64
+
+        init(targetTokenVault: @{FungibleToken.Vault}, remainingSourceTokenVault: @{FungibleToken.Vault}?) {
             self.targetTokenVault <- targetTokenVault
             self.remainingSourceTokenVault <- remainingSourceTokenVault
             if self.remainingSourceTokenVault == nil {
@@ -302,19 +303,10 @@ pub contract IncrementSwapRouterV2 {
             } else {
                 self.remainingSourceTokenVaultAmount = self.remainingSourceTokenVault?.balance!
             }
-            
-        }
-        destroy() {
-            pre {
-                self.targetTokenVault.balance == 0.0: ""
-                self.remainingSourceTokenVault == nil || self.remainingSourceTokenVault?.balance == 0.0: ""
-            }
-            destroy self.targetTokenVault
-            destroy self.remainingSourceTokenVault
         }
     }
 
-    pub fun createImmediateSwap(): @ImmediateSwap {
+    access(all) fun createImmediateSwap(): @ImmediateSwap {
         return <- create ImmediateSwap()
     }
 
@@ -323,7 +315,7 @@ pub contract IncrementSwapRouterV2 {
     // @Param  - amountIn:     e.g. 50.0
     // @Param  - tokenKeyPath: e.g. ["A.f8d6e0586b0a20c7.FUSD", "A.f8d6e0586b0a20c7.FlowToken", "A.f8d6e0586b0a20c7.USDC"]
     // @Return - [UFix64]:     e.g. [50.0, 10.0, 48.0]
-    pub fun getAmountsOut(amountIn: UFix64, tokenKeyPath: [String]): [UFix64]? {
+    access(all) fun getAmountsOut(amountIn: UFix64, tokenKeyPath: [String]): [UFix64]? {
         pre {
             tokenKeyPath.length >= 2: SwapError.ErrorEncode(msg: "SwapRouter: Invalid path", err: SwapError.ErrorCode.INVALID_PARAMETERS)
         }
@@ -335,7 +327,7 @@ pub contract IncrementSwapRouterV2 {
             // volatile pool
             let volatilePairAddr = SwapFactory.getPairAddress(token0Key: tokenKeyPath[i], token1Key: tokenKeyPath[i+1])
             if volatilePairAddr != nil {
-                let poolPublicRef = getAccount(volatilePairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                let poolPublicRef = getAccount(volatilePairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                 let poolInfo = poolPublicRef.getPairInfo()
                 if (poolInfo[2] as! UFix64) > 0.0 {
                     let curAmountOut = poolPublicRef.getAmountOut(amountIn: amounts[i], tokenInKey: tokenKeyPath[i])
@@ -347,7 +339,7 @@ pub contract IncrementSwapRouterV2 {
             // stable pool
             let stablePairAddr = StableSwapFactory.getPairAddress(token0Key: tokenKeyPath[i], token1Key: tokenKeyPath[i+1])
             if stablePairAddr != nil {
-                let poolPublicRef = getAccount(stablePairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                let poolPublicRef = getAccount(stablePairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                 let poolInfo = poolPublicRef.getPairInfo()
                 if (poolInfo[2] as! UFix64) > 0.0 {
                     let curAmountOut = poolPublicRef.getAmountOut(amountIn: amounts[i], tokenInKey: tokenKeyPath[i])
@@ -364,7 +356,7 @@ pub contract IncrementSwapRouterV2 {
     }
 
     /// Perform a chained swap calculation end with exact amountOut
-    pub fun getAmountsIn(amountOut: UFix64, tokenKeyPath: [String]): [UFix64]? {
+    access(all) fun getAmountsIn(amountOut: UFix64, tokenKeyPath: [String]): [UFix64]? {
         pre {
             tokenKeyPath.length >= 2: SwapError.ErrorEncode(msg: "SwapRouter: Invalid path", err: SwapError.ErrorCode.INVALID_PARAMETERS)
         }
@@ -379,7 +371,7 @@ pub contract IncrementSwapRouterV2 {
             // volatile pool
             let volatilePairAddr = SwapFactory.getPairAddress(token0Key: tokenKeyPath[i], token1Key: tokenKeyPath[i-1])
             if volatilePairAddr != nil {
-                let poolPublicRef = getAccount(volatilePairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                let poolPublicRef = getAccount(volatilePairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                 let poolInfo = poolPublicRef.getPairInfo()
                 let tokenOutReserve = ((poolInfo[0] as! String)==tokenKeyPath[i])? (poolInfo[2] as! UFix64) : (poolInfo[3] as! UFix64)
                 if (poolInfo[2] as! UFix64) > 0.0 && tokenOutReserve > amounts[i] {
@@ -392,7 +384,7 @@ pub contract IncrementSwapRouterV2 {
             // stable pool
             let stablePairAddr = StableSwapFactory.getPairAddress(token0Key: tokenKeyPath[i], token1Key: tokenKeyPath[i-1])
             if stablePairAddr != nil {
-                let poolPublicRef = getAccount(stablePairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                let poolPublicRef = getAccount(stablePairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                 let poolInfo = poolPublicRef.getPairInfo()
                 let tokenOutReserve = ((poolInfo[0] as! String)==tokenKeyPath[i])? (poolInfo[2] as! UFix64) : (poolInfo[3] as! UFix64)
                 if (poolInfo[2] as! UFix64) > 0.0 && tokenOutReserve > amounts[i] {
@@ -421,12 +413,12 @@ pub contract IncrementSwapRouterV2 {
     ///                              [A.f8d6e0586b0a20c7.FUSD, A.f8d6e0586b0a20c7.FlowToken, A.f8d6e0586b0a20c7.USDC]
     /// @Param  - deadline:     The timeout block timestamp for the transaction
     /// @Return - Vault:        outVault
-    pub fun swapExactTokensForTokens(
-        exactVaultIn: @FungibleToken.Vault,
+    access(all) fun swapExactTokensForTokens(
+        exactVaultIn: @{FungibleToken.Vault},
         amountOutMin: UFix64,
         tokenKeyPath: [String],
         deadline: UFix64
-    ): @FungibleToken.Vault {
+    ): @{FungibleToken.Vault} {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "SwapRouter: expired",
@@ -452,12 +444,12 @@ pub contract IncrementSwapRouterV2 {
     ///                                [A.f8d6e0586b0a20c7.FUSD, A.f8d6e0586b0a20c7.FlowToken, A.f8d6e0586b0a20c7.USDC]
     /// @Param  - deadline:       The timeout block timestamp for the transaction
     /// @Return - [OutVault, RemainingInVault]
-    pub fun swapTokensForExactTokens(
-        vaultInMax: @FungibleToken.Vault,
+    access(all) fun swapTokensForExactTokens(
+        vaultInMax: @{FungibleToken.Vault},
         exactAmountOut: UFix64,
         tokenKeyPath: [String],
         deadline: UFix64
-    ): @[FungibleToken.Vault] {
+    ): @[{FungibleToken.Vault}] {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "SwapRouter: expired",
@@ -481,12 +473,12 @@ pub contract IncrementSwapRouterV2 {
     }
     
     ///
-    pub fun swapWithPair(
-        vaultIn: @FungibleToken.Vault,
+    access(all) fun swapWithPair(
+        vaultIn: @{FungibleToken.Vault},
         exactAmountOut: UFix64?,
         tokenInKey: String,
         tokenOutKey: String
-    ): @FungibleToken.Vault {
+    ): @{FungibleToken.Vault} {
         let amountIn = vaultIn.balance
 
         var maxAmountOut: UFix64? = nil
@@ -494,7 +486,7 @@ pub contract IncrementSwapRouterV2 {
         // volatile pool
         let volatilePairAddr = SwapFactory.getPairAddress(token0Key: tokenInKey, token1Key: tokenOutKey)
         if volatilePairAddr != nil {
-            let poolPublicRef = getAccount(volatilePairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+            let poolPublicRef = getAccount(volatilePairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
             let curAmountOut = poolPublicRef.getAmountOut(amountIn: amountIn, tokenInKey: tokenInKey)
             if maxAmountOut == nil || curAmountOut > maxAmountOut! {
                 maxAmountOut = curAmountOut
@@ -504,7 +496,7 @@ pub contract IncrementSwapRouterV2 {
         // stable pool
         let stablePairAddr = StableSwapFactory.getPairAddress(token0Key: tokenInKey, token1Key: tokenOutKey)
         if stablePairAddr != nil {
-            let poolPublicRef = getAccount(stablePairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+            let poolPublicRef = getAccount(stablePairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
             let curAmountOut = poolPublicRef.getAmountOut(amountIn: amountIn, tokenInKey: tokenInKey)
             if maxAmountOut == nil || curAmountOut > maxAmountOut! {
                 maxAmountOut = curAmountOut
@@ -516,7 +508,7 @@ pub contract IncrementSwapRouterV2 {
     }
     
     ///
-    pub fun swapWithPath(vaultIn: @FungibleToken.Vault, tokenKeyPath: [String], exactAmounts: [UFix64]?): @FungibleToken.Vault {
+    access(all) fun swapWithPath(vaultIn: @{FungibleToken.Vault}, tokenKeyPath: [String], exactAmounts: [UFix64]?): @{FungibleToken.Vault} {
         pre {
             tokenKeyPath.length >= 2: SwapError.ErrorEncode(msg: "Invalid path.", err: SwapError.ErrorCode.INVALID_PARAMETERS)
         }
@@ -552,11 +544,11 @@ pub contract IncrementSwapRouterV2 {
         var index = 4
         var curVaultOut <- vaultOut4
         while(index < tokenKeyPath.length-1) {
-            var in <- curVaultOut.withdraw(amount: curVaultOut.balance)
+            var inVault <- curVaultOut.withdraw(amount: curVaultOut.balance)
             
             var exactAmountOut: UFix64? = nil
             if exactAmounts != nil { exactAmountOut = exactAmounts![index+1] }
-            var out <- self.swapWithPair(vaultIn: <- in, exactAmountOut: exactAmountOut, tokenInKey: tokenKeyPath[index], tokenOutKey:tokenKeyPath[index+1])
+            var out <- self.swapWithPair(vaultIn: <- inVault, exactAmountOut: exactAmountOut, tokenInKey: tokenKeyPath[index], tokenOutKey:tokenKeyPath[index+1])
             curVaultOut <-> out
 
             destroy out
@@ -566,7 +558,7 @@ pub contract IncrementSwapRouterV2 {
         return <-curVaultOut
     }
 
-    pub fun convertTypeListToIdentifierList(typeList: [Type]): [String] {
+    access(all) fun convertTypeListToIdentifierList(typeList: [Type]): [String] {
         let identifierList: [String] = []
         for tokenType in typeList {
             identifierList.append(tokenType.identifier)

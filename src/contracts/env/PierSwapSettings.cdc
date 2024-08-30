@@ -9,36 +9,36 @@ some behaviors in PierPair and PierSwapFactory contracts.
 @author Metapier Foundation Ltd.
 
  */
-pub contract PierSwapSettings {
+access(all) contract PierSwapSettings {
 
     // Event that is emitted when the contract is created
-    pub event ContractInitialized()
+    access(all) event ContractInitialized()
 
     // Event that is emitted when the trading fees have been updated
-    pub event SwapFeesUpdated(poolTotalFee: UFix64, poolProtocolFee: UFix64)
+    access(all) event SwapFeesUpdated(poolTotalFee: UFix64, poolProtocolFee: UFix64)
 
     // Event that is emitted when the protocol fee recipient has been updated
-    pub event ProtocolFeeRecipientUpdated(newAddress: Address)
+    access(all) event ProtocolFeeRecipientUpdated(newAddress: Address)
 
     // DEPRECATED: Event that is emitted when the information for oracles is turned on/off
-    pub event ObservationSwitchUpdated(enabled: Bool)
+    access(all) event ObservationSwitchUpdated(enabled: Bool)
 
     // The fraction of the swap input to collect as the total trading fee
-    pub var poolTotalFee: UFix64
+    access(all) var poolTotalFee: UFix64
 
     // The fraction of the swap input to collect as protocol fee (part of `poolTotalFee`)
-    pub var poolProtocolFee: UFix64
+    access(all) var poolProtocolFee: UFix64
 
     // The address to receive LP tokens as protocol fee
-    pub var protocolFeeRecipient: Address
+    access(all) var protocolFeeRecipient: Address
 
     // Admin resource provides functions for tuning fields
     // in this contract.
-    pub resource Admin {
+    access(all) resource Admin {
         
         // Updates `poolTotalFee` and `poolProtocolFee`
         // Always update both values to avoid bad configuration by mistakes
-        pub fun setFees(newTotalFee: UFix64, newProtocolFee: UFix64) {
+        access(all) fun setFees(newTotalFee: UFix64, newProtocolFee: UFix64) {
             pre {
                 newTotalFee <= 0.01: "Metapier PierSwapSettings: Total fee can't exceed 1%"
                 newProtocolFee < newTotalFee: "Metapier PierSwapSettings: Protocol fee can't exceed total fee"
@@ -57,10 +57,10 @@ pub contract PierSwapSettings {
         }
 
         // Updates `protocolFeeRecipient`
-        pub fun setProtocolFeeRecipient(newAddress: Address) {
+        access(all) fun setProtocolFeeRecipient(newAddress: Address) {
             pre {
                 getAccount(newAddress)
-                    .getCapability<&PierLPToken.Collection{MultiFungibleToken.Receiver}>(PierLPToken.CollectionPublicPath)
+                    .capabilities.get<&{MultiFungibleToken.Receiver}>(PierLPToken.CollectionPublicPath)!
                     .check():
                     "Metapier PierSwapSettings: Cannot find LP token collection in new protocol fee recipient"
             }
@@ -71,20 +71,19 @@ pub contract PierSwapSettings {
     }
 
     // Used in PierPair to calculate total fee
-    pub fun getPoolTotalFeeCoefficient(): UFix64 {
+    access(all) view fun getPoolTotalFeeCoefficient(): UFix64 {
         return self.poolTotalFee * 1_000.0
     }
 
     // Used in PierPair to calculate protocol fee
-    pub fun getPoolProtocolFeeCoefficient(): UFix64 {
+    access(all) view fun getPoolProtocolFeeCoefficient(): UFix64 {
         return self.poolTotalFee / self.poolProtocolFee - 1.0
     }
 
     // Used in PierPair to deposit minted LP tokens as protocol fee
-    pub fun depositProtocolFee(vault: @MultiFungibleToken.Vault) {
-        let feeCollectionRef = getAccount(self.protocolFeeRecipient)
-            .getCapability<&PierLPToken.Collection{MultiFungibleToken.Receiver}>(PierLPToken.CollectionPublicPath)
-            .borrow() ?? panic("Metapier PierSwapSettings: Protocol fee receiver not found")
+    access(all) fun depositProtocolFee(vault: @{MultiFungibleToken.Vault}) {
+        let feeCollectionRef = getAccount(self.protocolFeeRecipient).capabilities.borrow<&{MultiFungibleToken.Receiver}>(PierLPToken.CollectionPublicPath)
+            ?? panic("Metapier PierSwapSettings: Protocol fee receiver not found")
         feeCollectionRef.deposit(from: <-vault)
     }
 
@@ -95,13 +94,13 @@ pub contract PierSwapSettings {
 
         // create and store admin
         let admin <- create Admin()
-        self.account.save(<- admin, to: /storage/metapierSwapSettingsAdmin)
+        self.account.storage.save(<- admin, to: /storage/metapierSwapSettingsAdmin)
 
         // LP token collection setup
-        self.account.save(<-PierLPToken.createEmptyCollection(), to: PierLPToken.CollectionStoragePath)
-        self.account.link<&PierLPToken.Collection{MultiFungibleToken.Receiver, MultiFungibleToken.CollectionPublic}>(
-            PierLPToken.CollectionPublicPath, 
-            target: PierLPToken.CollectionStoragePath
+        self.account.storage.save(<-PierLPToken.createEmptyCollection(), to: PierLPToken.CollectionStoragePath)
+        self.account.capabilities.publish(
+            self.account.capabilities.storage.issue<&{MultiFungibleToken.Receiver, MultiFungibleToken.CollectionPublic}>(PierLPToken.CollectionStoragePath),
+            at: PierLPToken.CollectionPublicPath
         )
 
         emit ContractInitialized()

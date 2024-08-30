@@ -1,13 +1,13 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 
-pub fun main(userAddr: Address, vaultPaths: [PublicPath]): [UFix64] {
+access(all) fun main(userAddr: Address, vaultPaths: [PublicPath]): [UFix64] {
     var balances: [UFix64] = []
     for vaultPath in vaultPaths {
-        let vaultBalance = getAccount(userAddr).getCapability<&{FungibleToken.Balance}>(vaultPath)
-        if vaultBalance.check() == false || vaultBalance.borrow() == nil {
+        let balanceCap = getAccount(userAddr).capabilities.get<&{FungibleToken.Balance}>(vaultPath)
+        if balanceCap.check() == false || balanceCap.borrow() == nil {
             balances.append(0.0)
         } else {
-            balances.append(vaultBalance.borrow()!.balance)
+            balances.append(balanceCap.borrow()!.balance)
         }
     }
     return balances

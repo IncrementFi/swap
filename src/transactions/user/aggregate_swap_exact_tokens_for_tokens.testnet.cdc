@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import FlowToken from "../../contracts/tokens/FlowToken.cdc"
 import TeleportedTetherToken from "../../contracts/tokens/TeleportedTetherToken.cdc"
 import FiatToken from "../../contracts/tokens/FiatToken.cdc"
@@ -35,7 +35,7 @@ transaction(
     tokenOutReceiverPath: PublicPath,
     tokenOutBalancePath: PublicPath,
 ) {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "EXPIRED",
@@ -51,13 +51,23 @@ transaction(
 
         var tokenOutAmountTotal = 0.0
 
-        var tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+        var tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         if tokenOutReceiverRef == nil {
-            userAccount.save(<-getAccount(swapOutTokenAddress).contracts.borrow<&FungibleToken>(name: swapOutTokenName)!.createEmptyVault(), to: tokenOutVaultPath)
-            userAccount.link<&{FungibleToken.Receiver}>(tokenOutReceiverPath, target: tokenOutVaultPath)
-            userAccount.link<&{FungibleToken.Balance}>(tokenOutBalancePath, target: tokenOutVaultPath)
+            let outTokenAddrStr = swapOutTokenAddress.toString()
+            let outTokenAddrStr0xTrimmed = outTokenAddrStr.slice(from: 2, upTo: outTokenAddrStr.length)
+            /// e.g.: "A.1654653399040a61.FlowToken.Vault"
+            let outTokenVaultRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(swapOutTokenName).concat(".Vault")) ?? panic("outToken get runtime type fail")
+            userAccount.storage.save(<-getAccount(swapOutTokenAddress).contracts.borrow<&{FungibleToken}>(name: swapOutTokenName)!.createEmptyVault(vaultType: outTokenVaultRuntimeType), to: tokenOutVaultPath)
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath),
+                at: tokenOutReceiverPath
+            )
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Balance}>(tokenOutVaultPath),
+                at: tokenOutBalancePath
+            )
 
-            tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+            tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         }
 
         var pathIndex = 0
@@ -76,7 +86,7 @@ transaction(
                 let pathLength = path.length
                 var pathStep = 0
 
-                var pairInVault <- userAccount.borrow<&FungibleToken.Vault>(from: tokenInVaultPath)!.withdraw(amount: pathInAmount)
+                var pairInVault <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: tokenInVaultPath)!.withdraw(amount: pathInAmount)
                 var totalPairInAmount = pathInAmount
                 // swap in path
                 while(pathStep < pathLength-1) {
@@ -89,7 +99,11 @@ transaction(
                     var poolIndex = 0;
                     let poolLength = poolAddressesToPairs[pathIndex][pathStep].length
 
-                    var poolOutVault <- getAccount(tokenOutAddress).contracts.borrow<&FungibleToken>(name: tokenOutName)!.createEmptyVault()
+                    let outTokenAddrStr = tokenOutAddress.toString()
+                    let outTokenAddrStr0xTrimmed = outTokenAddrStr.slice(from: 2, upTo: outTokenAddrStr.length)
+                    /// e.g.: "A.1654653399040a61.FlowToken.Vault"
+                    let outTokenVaultRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(tokenOutName).concat(".Vault")) ?? panic("outToken get runtime type fail")
+                    var poolOutVault <- getAccount(tokenOutAddress).contracts.borrow<&{FungibleToken}>(name: tokenOutName)!.createEmptyVault(vaultType: outTokenVaultRuntimeType)
 
                     // swap in pool
                     while(poolIndex < poolLength) {
@@ -104,16 +118,16 @@ transaction(
                         
                         switch poolKey {
                             case "increment-v1":
-                                let pool = getAccount(poolAddress).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                                let pool = getAccount(poolAddress).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                                 poolOutVault.deposit(from: <-pool.swap(vaultIn: <- pairInVault.withdraw(amount: poolInAmount), exactAmountOut: nil))
                             
                             case "increment-stable":
-                                let pool = getAccount(poolAddress).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                                let pool = getAccount(poolAddress).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                                 poolOutVault.deposit(from: <-pool.swap(vaultIn: <- pairInVault.withdraw(amount: poolInAmount), exactAmountOut: nil))
                             
                             case "metapier":
                                 PierRouter.swapExactTokensAForTokensB(
-                                    fromVault: &pairInVault as &FungibleToken.Vault,
+                                    fromVault: &pairInVault as auth(FungibleToken.Withdraw) &{FungibleToken.Vault},
                                     toVault: &poolOutVault as &{FungibleToken.Receiver},
                                     amountIn: poolInAmount,
                                     amountOutMin: 0.0,

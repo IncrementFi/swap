@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapFactory from "../../contracts/SwapFactory.cdc"
 import StableSwapFactory from "../../contracts/StableSwapFactory.cdc"
 import SwapInterfaces from "../../contracts/SwapInterfaces.cdc"
@@ -17,7 +17,7 @@ transaction(
     token1VaultPath: StoragePath,
     stableMode: Bool
 ) {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "AddLiquidity: expired ".concat(deadline.toString()).concat(" < ").concat(getCurrentBlock().timestamp.toString()),
@@ -28,7 +28,7 @@ transaction(
             StableSwapFactory.getPairAddress(token0Key: token0Key, token1Key: token1Key) ?? panic("AddLiquidity: nonexistent stable pair ".concat(token0Key).concat(" <-> ").concat(token1Key).concat(", create stable pair first"))
             :
             SwapFactory.getPairAddress(token0Key: token0Key, token1Key: token1Key) ?? panic("AddLiquidity: nonexistent pair ".concat(token0Key).concat(" <-> ").concat(token1Key).concat(", create pair first"))
-        let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+        let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
         /*
             pairInfo = [
                 SwapPair.token0Key,
@@ -79,8 +79,8 @@ transaction(
             }
         }
         
-        let token0Vault <- userAccount.borrow<&FungibleToken.Vault>(from: token0VaultPath)!.withdraw(amount: token0In)
-        let token1Vault <- userAccount.borrow<&FungibleToken.Vault>(from: token1VaultPath)!.withdraw(amount: token1In)
+        let token0Vault <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: token0VaultPath)!.withdraw(amount: token0In)
+        let token1Vault <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: token1VaultPath)!.withdraw(amount: token1In)
         let lpTokenVault <- pairPublicRef.addLiquidity(
             tokenAVault: <- token0Vault,
             tokenBVault: <- token1Vault
@@ -88,12 +88,13 @@ transaction(
         
         let lpTokenCollectionStoragePath = SwapConfig.LpTokenCollectionStoragePath
         let lpTokenCollectionPublicPath = SwapConfig.LpTokenCollectionPublicPath
-        var lpTokenCollectionRef = userAccount.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
+        var lpTokenCollectionRef = userAccount.storage.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
         if lpTokenCollectionRef == nil {
-            destroy <- userAccount.load<@AnyResource>(from: lpTokenCollectionStoragePath)
-            userAccount.save(<-SwapFactory.createEmptyLpTokenCollection(), to: lpTokenCollectionStoragePath)
-            userAccount.link<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionPublicPath, target: lpTokenCollectionStoragePath)
-            lpTokenCollectionRef = userAccount.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
+            destroy <- userAccount.storage.load<@AnyResource>(from: lpTokenCollectionStoragePath)
+            userAccount.storage.save(<-SwapFactory.createEmptyLpTokenCollection(), to: lpTokenCollectionStoragePath)
+            let lpTokenCollectionCap = userAccount.capabilities.storage.issue<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionStoragePath)
+            userAccount.capabilities.publish(lpTokenCollectionCap, at: lpTokenCollectionPublicPath)
+            lpTokenCollectionRef = userAccount.storage.borrow<&SwapFactory.LpTokenCollection>(from: lpTokenCollectionStoragePath)
         }
         lpTokenCollectionRef!.deposit(pairAddr: pairAddr, lpTokenVault: <- lpTokenVault)
     }

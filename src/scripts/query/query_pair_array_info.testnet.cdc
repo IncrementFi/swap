@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapFactory from "../../contracts/SwapFactory.cdc"
 import StableSwapFactory from "../../contracts/StableSwapFactory.cdc"
 
@@ -14,7 +14,7 @@ import PierPair from "../../contracts/env/PierPair.cdc"
 import PierSwapFactory from "../../contracts/env/PierSwapFactory.cdc"
 import PierSwapSettings from "../../contracts/env/PierSwapSettings.cdc"
 
-pub fun main(from: UInt64, to: UInt64, poolSources: [String]): [AnyStruct] {
+access(all) fun main(from: UInt64, to: UInt64, poolSources: [String]): [AnyStruct] {
     pre {
         from <= to: "from > to"
     }

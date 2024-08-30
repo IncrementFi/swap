@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapFactory from "../../contracts/SwapFactory.cdc"
 import StableSwapFactory from "../../contracts/StableSwapFactory.cdc"
 
@@ -18,7 +18,7 @@ import StableSwapFactory from "../../contracts/StableSwapFactory.cdc"
         ]
     ]
 */
-pub fun main(from: UInt64, to: UInt64): [AnyStruct] {
+access(all) fun main(from: UInt64, to: UInt64): [AnyStruct] {
     let poolInfos: [AnyStruct] = [];
     // increment-stable
     let increment_stable: [AnyStruct] = StableSwapFactory.getSlicedPairInfos(from: from, to: to)

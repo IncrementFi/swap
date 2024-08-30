@@ -12,16 +12,18 @@ import StarlyUsdtSwapPair from "../../contracts/env/StarlyUsdtSwapPair.cdc"
 import UsdcUsdtSwapPair from "../../contracts/env/UsdcUsdtSwapPair.cdc"
 import FusdUsdtSwapPair from "../../contracts/env/FusdUsdtSwapPair.cdc"
 
-pub fun main(pairAddrs: [Address]): [AnyStruct] {
+access(all) fun main(pairAddrs: [Address]): [AnyStruct] {
     var res: [AnyStruct] = []
     var i = 0
     var len = pairAddrs.length
     while(i < len) {
         let addr = pairAddrs[i]
-        let incrementPool = getAccount(addr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()
-        let metapierPool = getAccount(addr).getCapability<&PierPair.Pool{IPierPair.IPool}>(PierSwapFactory.SwapPoolPublicPath).borrow()
+        let incrementPool = getAccount(addr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)
+            ?? panic("cannot borrow reference to PairPublic")
+        let metapierPool = getAccount(addr).capabilities.borrow<&{IPierPair.IPool}>(PierSwapFactory.SwapPoolPublicPath)
+            ?? panic("cannot borrow reference to IPierPair")
         if (incrementPool != nil) {
-            let poolInfo = incrementPool!.getPairInfo()
+            let poolInfo = incrementPool.getPairInfo()
             if poolInfo.length == 6 {
                 res.append([poolInfo[0], poolInfo[1], poolInfo[2], poolInfo[3], poolInfo[4], poolInfo[5], "increment-v1", "uni", 30, "1.0"])
             } else {
@@ -33,9 +35,9 @@ pub fun main(pairAddrs: [Address]): [AnyStruct] {
             }
         } else if(metapierPool != nil) {
             let poolAddress = addr
-            let token0Key = metapierPool!.tokenAType.identifier.slice(from: 0, upTo: metapierPool!.tokenAType.identifier.length - 6)
-            let token1Key = metapierPool!.tokenBType.identifier.slice(from: 0, upTo: metapierPool!.tokenBType.identifier.length - 6)
-            let reserves = metapierPool!.getReserves();
+            let token0Key = metapierPool.tokenAType.identifier.slice(from: 0, upTo: metapierPool.tokenAType.identifier.length - 6)
+            let token1Key = metapierPool.tokenBType.identifier.slice(from: 0, upTo: metapierPool.tokenBType.identifier.length - 6)
+            let reserves = metapierPool.getReserves();
             let metapierSwapFeeBps = UInt64(PierSwapSettings.getPoolTotalFeeCoefficient() * 10.0)
             res.append([token0Key, token1Key, reserves[0], reserves[1], poolAddress, 0.0, "metapier", "uni", metapierSwapFeeBps, "1.0"])
         } else {

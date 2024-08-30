@@ -1,44 +1,44 @@
-import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "../env/FungibleToken.cdc" // 0xf233dcee88fe0abe
 
-pub contract FiatToken: FungibleToken {
+access(all) contract FiatToken: FungibleToken {
   // Frozen flag controlled by Admin
-  pub var isFrozen: Bool
+  access(all) var isFrozen: Bool
 
   // Total supply of FiatTokens in existence
-  pub var totalSupply: UFix64
+  access(all) var totalSupply: UFix64
 
   // Record teleported Ethereum hashes
-  pub var teleported: {String: Bool}
+  access(all) var teleported: {String: Bool}
 
   // Defines token vault storage path
-  pub let TokenStoragePath: StoragePath
+  access(all) let TokenStoragePath: StoragePath
 
   // Defines token vault public balance path
-  pub let TokenPublicBalancePath: PublicPath
+  access(all) let TokenPublicBalancePath: PublicPath
 
   // Defines token vault public receiver path
-  pub let TokenPublicReceiverPath: PublicPath
+  access(all) let TokenPublicReceiverPath: PublicPath
 
   // Event that is emitted when the contract is created
-  pub event TokensInitialized(initialSupply: UFix64)
+  access(all) event TokensInitialized(initialSupply: UFix64)
 
   // Event that is emitted when tokens are withdrawn from a Vault
-  pub event TokensWithdrawn(amount: UFix64, from: Address?)
+  access(all) event TokensWithdrawn(amount: UFix64, from: Address?)
 
   // Event that is emitted when tokens are deposited to a Vault
-  pub event TokensDeposited(amount: UFix64, to: Address?)
+  access(all) event TokensDeposited(amount: UFix64, to: Address?)
 
   // Event that is emitted when new tokens are teleported in from Ethereum (from: Ethereum Address, 20 bytes)
-  pub event TokensTeleportedIn(amount: UFix64, from: [UInt8], hash: String)
+  access(all) event TokensTeleportedIn(amount: UFix64, from: [UInt8], hash: String)
 
   // Event that is emitted when tokens are destroyed and teleported to Ethereum (to: Ethereum Address, 20 bytes)
-  pub event TokensTeleportedOut(amount: UFix64, to: [UInt8])
+  access(all) event TokensTeleportedOut(amount: UFix64, to: [UInt8])
 
   // Event that is emitted when teleport fee is collected (type 0: out, 1: in)
-  pub event FeeCollected(amount: UFix64, type: UInt8)
+  access(all) event FeeCollected(amount: UFix64, type: UInt8)
 
   // Event that is emitted when a new burner resource is created
-  pub event TeleportAdminCreated(allowedAmount: UFix64)
+  access(all) event TeleportAdminCreated(allowedAmount: UFix64)
 
   // Vault
   //
@@ -52,15 +52,40 @@ pub contract FiatToken: FungibleToken {
   // out of thin air. A special Minter resource needs to be defined to mint
   // new tokens.
   //
-  pub resource Vault: FungibleToken.Provider, FungibleToken.Receiver, FungibleToken.Balance {
+  access(all) resource Vault: FungibleToken.Vault {
     
     // holds the balance of a users tokens
-    pub var balance: UFix64
+    access(all) var balance: UFix64
 
     // initialize the balance at resource creation time
     init(balance: UFix64) {
       self.balance = balance
     }
+
+    access(contract) fun burnCallback() {
+      if self.balance > 0.0 {
+        FiatToken.totalSupply = FiatToken.totalSupply - self.balance
+      }
+      self.balance = 0.0
+    }
+
+    /// getSupportedVaultTypes optionally returns a list of vault types that this receiver accepts
+    access(all) view fun getSupportedVaultTypes(): {Type: Bool} {
+      return {self.getType(): true}
+    }
+
+    access(all) view fun isSupportedVaultType(type: Type): Bool {
+      if (type == self.getType()) { return true } else { return false }
+    }
+
+    /// Asks if the amount can be withdrawn from this vault
+    access(all) view fun isAvailableToWithdraw(amount: UFix64): Bool {
+      return amount <= self.balance
+    }
+
+    /// Added simply to conform to FT-V2 interface.
+    access(all) view fun getViews(): [Type] { return [] }
+    access(all) fun resolveView(_ view: Type): AnyStruct? { return nil }
 
     // withdraw
     //
@@ -71,7 +96,7 @@ pub contract FiatToken: FungibleToken {
     // created Vault to the context that called so it can be deposited
     // elsewhere.
     //
-    pub fun withdraw(amount: UFix64): @FungibleToken.Vault {
+    access(FungibleToken.Withdraw) fun withdraw(amount: UFix64): @{FungibleToken.Vault} {
       self.balance = self.balance - amount
       emit TokensWithdrawn(amount: amount, from: self.owner?.address)
       return <- create Vault(balance: amount)
@@ -84,7 +109,7 @@ pub contract FiatToken: FungibleToken {
     // It is allowed to destroy the sent Vault because the Vault
     // was a temporary holder of the tokens. The Vault's balance has
     // been consumed and therefore can be destroyed.
-    pub fun deposit(from: @FungibleToken.Vault) {
+    access(all) fun deposit(from: @{FungibleToken.Vault}) {
       let vault <- from as! @FiatToken.Vault
       self.balance = self.balance + vault.balance
       emit TokensDeposited(amount: vault.balance, to: self.owner?.address)
@@ -92,8 +117,8 @@ pub contract FiatToken: FungibleToken {
       destroy vault
     }
 
-    destroy() {
-      FiatToken.totalSupply = FiatToken.totalSupply - self.balance
+    access(all) fun createEmptyVault(): @{FungibleToken.Vault} {
+      return <- create Vault(balance: 0.0)
     }
   }
 
@@ -104,12 +129,16 @@ pub contract FiatToken: FungibleToken {
   // and store the returned Vault in their storage in order to allow their
   // account to be able to receive deposits of this token type.
   //
-  pub fun createEmptyVault(): @FungibleToken.Vault {
+  access(all) fun createEmptyVault(vaultType: Type): @FiatToken.Vault {
     return <- create Vault(balance: 0.0)
   }
 
-  pub resource Allowance {
-    pub var balance: UFix64
+  /// Added simply to conform to FT-V2 interface.
+  access(all) view fun getContractViews(resourceType: Type?): [Type] { return [] }
+  access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? { return nil }
+
+  access(all) resource Allowance {
+    access(all) var balance: UFix64
 
     // initialize the balance at resource creation time
     init(balance: UFix64) {
@@ -117,60 +146,60 @@ pub contract FiatToken: FungibleToken {
     }
   }
 
-  pub resource Administrator {
+  access(all) resource Administrator {
 
     // createNewTeleportAdmin
     //
     // Function that creates and returns a new teleport admin resource
     //
-    pub fun createNewTeleportAdmin(allowedAmount: UFix64): @TeleportAdmin {
+    access(all) fun createNewTeleportAdmin(allowedAmount: UFix64): @TeleportAdmin {
       emit TeleportAdminCreated(allowedAmount: allowedAmount)
       return <- create TeleportAdmin(allowedAmount: allowedAmount)
     }
 
-    pub fun freeze() {
+    access(all) fun freeze() {
       FiatToken.isFrozen = true
     }
 
-    pub fun unfreeze() {
+    access(all) fun unfreeze() {
       FiatToken.isFrozen = false
     }
 
-    pub fun createAllowance(allowedAmount: UFix64): @Allowance {
+    access(all) fun createAllowance(allowedAmount: UFix64): @Allowance {
       return <- create Allowance(balance: allowedAmount)
     }
   }
 
-  pub resource interface TeleportUser {
+  access(all) resource interface TeleportUser {
     // fee collected when token is teleported from Ethereum to Flow
-    pub var inwardFee: UFix64
+    access(all) var inwardFee: UFix64
 
     // fee collected when token is teleported from Flow to Ethereum
-    pub var outwardFee: UFix64
+    access(all) var outwardFee: UFix64
     
     // the amount of tokens that the minter is allowed to mint
-    pub var allowedAmount: UFix64
+    access(all) var allowedAmount: UFix64
 
     // corresponding controller account on Ethereum
-    pub var ethereumAdminAccount: [UInt8]
+    access(all) var ethereumAdminAccount: [UInt8]
 
-    pub fun teleportOut(from: @FungibleToken.Vault, to: [UInt8])
+    access(all) fun teleportOut(from: @{FungibleToken.Vault}, to: [UInt8])
 
-    pub fun depositAllowance(from: @Allowance)
+    access(all) fun depositAllowance(from: @Allowance)
 
-    pub fun getEthereumAdminAccount(): [UInt8]
+    access(all) fun getEthereumAdminAccount(): [UInt8]
   }
 
-  pub resource interface TeleportControl {
-    pub fun teleportIn(amount: UFix64, from: [UInt8], hash: String): @FiatToken.Vault
+  access(all) resource interface TeleportControl {
+    access(all) fun teleportIn(amount: UFix64, from: [UInt8], hash: String): @FiatToken.Vault
 
-    pub fun withdrawFee(amount: UFix64): @FungibleToken.Vault
+    access(all) fun withdrawFee(amount: UFix64): @{FungibleToken.Vault}
     
-    pub fun updateInwardFee(fee: UFix64)
+    access(all) fun updateInwardFee(fee: UFix64)
 
-    pub fun updateOutwardFee(fee: UFix64)
+    access(all) fun updateOutwardFee(fee: UFix64)
 
-    pub fun updateEthereumAdminAccount(account: [UInt8])
+    access(all) fun updateEthereumAdminAccount(account: [UInt8])
   }
 
   // TeleportAdmin resource
@@ -178,29 +207,29 @@ pub contract FiatToken: FungibleToken {
   //  Resource object that has the capability to mint teleported tokens
   //  upon receiving teleport request from Ethereum side
   //
-  pub resource TeleportAdmin: TeleportUser, TeleportControl {
+  access(all) resource TeleportAdmin: TeleportUser, TeleportControl {
     
     // the amount of tokens that the minter is allowed to mint
-    pub var allowedAmount: UFix64
+    access(all) var allowedAmount: UFix64
 
     // receiver reference to collect teleport fee
-    pub let feeCollector: @FiatToken.Vault
+    access(all) let feeCollector: @FiatToken.Vault
 
     // fee collected when token is teleported from Ethereum to Flow
-    pub var inwardFee: UFix64
+    access(all) var inwardFee: UFix64
 
     // fee collected when token is teleported from Flow to Ethereum
-    pub var outwardFee: UFix64
+    access(all) var outwardFee: UFix64
 
     // corresponding controller account on Ethereum
-    pub var ethereumAdminAccount: [UInt8]
+    access(all) var ethereumAdminAccount: [UInt8]
 
     // teleportIn
     //
     // Function that mints new tokens, adds them to the total supply,
     // and returns them to the calling context.
     //
-    pub fun teleportIn(amount: UFix64, from: [UInt8], hash: String): @FiatToken.Vault {
+    access(all) fun teleportIn(amount: UFix64, from: [UInt8], hash: String): @FiatToken.Vault {
       pre {
         !FiatToken.isFrozen: "Teleport service is frozen"
         amount <= self.allowedAmount: "Amount minted must be less than the allowed amount"
@@ -231,7 +260,7 @@ pub contract FiatToken: FungibleToken {
     // Note: the burned tokens are automatically subtracted from the 
     // total supply in the Vault destructor.
     //
-    pub fun teleportOut(from: @FungibleToken.Vault, to: [UInt8]) {
+    access(all) fun teleportOut(from: @{FungibleToken.Vault}, to: [UInt8]) {
       pre {
         !FiatToken.isFrozen: "Teleport service is frozen"
         to.length == 20: "Ethereum address should be 20 bytes"
@@ -248,19 +277,19 @@ pub contract FiatToken: FungibleToken {
       emit TokensTeleportedOut(amount: amount, to: to)
     }
 
-    pub fun withdrawFee(amount: UFix64): @FungibleToken.Vault {
+    access(all) fun withdrawFee(amount: UFix64): @{FungibleToken.Vault} {
       return <- self.feeCollector.withdraw(amount: amount)
     }
 
-    pub fun updateInwardFee(fee: UFix64) {
+    access(all) fun updateInwardFee(fee: UFix64) {
       self.inwardFee = fee
     }
 
-    pub fun updateOutwardFee(fee: UFix64) {
+    access(all) fun updateOutwardFee(fee: UFix64) {
       self.outwardFee = fee
     }
 
-    pub fun updateEthereumAdminAccount(account: [UInt8]) {
+    access(all) fun updateEthereumAdminAccount(account: [UInt8]) {
       pre {
         account.length == 20: "Ethereum address should be 20 bytes"
       }
@@ -268,32 +297,28 @@ pub contract FiatToken: FungibleToken {
       self.ethereumAdminAccount = account
     }
 
-    pub fun getFeeAmount(): UFix64 {
+    access(all) fun getFeeAmount(): UFix64 {
       return self.feeCollector.balance
     }
 
-    pub fun depositAllowance(from: @Allowance) {
+    access(all) fun depositAllowance(from: @Allowance) {
       self.allowedAmount = self.allowedAmount + from.balance
 
       destroy from
     }
 
-    pub fun getEthereumAdminAccount(): [UInt8] {
+    access(all) fun getEthereumAdminAccount(): [UInt8] {
       return self.ethereumAdminAccount
     }
 
     init(allowedAmount: UFix64) {
       self.allowedAmount = allowedAmount
 
-      self.feeCollector <- FiatToken.createEmptyVault() as! @FiatToken.Vault
+      self.feeCollector <- FiatToken.createEmptyVault(vaultType: Type<@FiatToken.Vault>())
       self.inwardFee = 0.01
       self.outwardFee = 3.0
 
       self.ethereumAdminAccount = []
-    }
-
-    destroy() {
-      destroy self.feeCollector
     }
   }
 
@@ -306,7 +331,7 @@ pub contract FiatToken: FungibleToken {
     self.TokenPublicReceiverPath = /public/FiatTokenReceiver
 
     let admin <- create Administrator()
-    self.account.save(<-admin, to: /storage/FiatTokenAdmin)
+    self.account.storage.save(<-admin, to: /storage/FiatTokenAdmin)
 
     // Emit an event that shows that the contract was initialized
     emit TokensInitialized(initialSupply: self.totalSupply)

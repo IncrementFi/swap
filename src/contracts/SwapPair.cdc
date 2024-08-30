@@ -5,34 +5,34 @@
 # Author: Increment Labs
 
 */
-import FungibleToken from "./tokens/FungibleToken.cdc"
+import FungibleToken from "./env/FungibleToken.cdc"
 import SwapInterfaces from "./SwapInterfaces.cdc"
 import SwapConfig from "./SwapConfig.cdc"
 import SwapError from "./SwapError.cdc"
 import SwapFactory from "./SwapFactory.cdc"
 
-pub contract SwapPair: FungibleToken {
+access(all) contract SwapPair: FungibleToken {
     /// Total supply of pair lpTokens in existence
-    pub var totalSupply: UFix64
+    access(all) var totalSupply: UFix64
     
     /// Two vaults for the trading pair.
-    access(self) let token0Vault: @FungibleToken.Vault
-    access(self) let token1Vault: @FungibleToken.Vault
-    pub let token0VaultType: Type
-    pub let token1VaultType: Type
-    pub let token0Key: String
-    pub let token1Key: String
+    access(self) let token0Vault: @{FungibleToken.Vault}
+    access(self) let token1Vault: @{FungibleToken.Vault}
+    access(all) let token0VaultType: Type
+    access(all) let token1VaultType: Type
+    access(all) let token0Key: String
+    access(all) let token1Key: String
     
     /// TWAP: last cumulative price
-    pub var blockTimestampLast: UFix64
-    pub var price0CumulativeLastScaled: UInt256
-    pub var price1CumulativeLastScaled: UInt256
+    access(all) var blockTimestampLast: UFix64
+    access(all) var price0CumulativeLastScaled: UInt256
+    access(all) var price1CumulativeLastScaled: UInt256
 
     /// Transaction lock 
     access(self) var lock: Bool
     
     /// √(reserve0 * reserve1) for volatile pool, or √√[(r0^3 * r1 + r0 * r1^3) / 2] for stable pool, as of immediately after the most recent liquidity event
-    pub var rootKLast: UFix64
+    access(all) var rootKLast: UFix64
 
     /// Reserved parameter fields: {ParamName: Value}
     /// Used fields:
@@ -40,32 +40,59 @@ pub contract SwapPair: FungibleToken {
     access(self) let _reservedFields: {String: AnyStruct}
 
     /// Event that is emitted when the contract is created
-    pub event TokensInitialized(initialSupply: UFix64)
-    /// Event that is emitted when tokens are withdrawn from a Vault
-    pub event TokensWithdrawn(amount: UFix64, from: Address?)
-    /// Event that is emitted when tokens are deposited to a Vault
-    pub event TokensDeposited(amount: UFix64, to: Address?)
-    /// Event that is emitted when new tokens are minted
-    pub event TokensMinted(amount: UFix64)
-    /// Event that is emitted when tokens are destroyed
-    pub event TokensBurned(amount: UFix64)
+    access(all) event TokensInitialized(initialSupply: UFix64)
+    /// Event that is emitted when lp tokens are minted
+    access(all) event TokensMinted(amount: UFix64)
+    /// Event that is emitted when lp tokens are destroyed
+    access(all) event TokensBurned(amount: UFix64)
+    /// Event that is emitted when liquidity is added
+    access(all) event LiquidityAdded(amount0: UFix64, amount1: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
+    /// Event that is emitted when liquidity is removed
+    access(all) event LiquidityRemoved(amount0: UFix64, amount1: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
     /// Event that is emitted when a swap trade happenes to this trading pair
-    /// direction: 0 - in self.token0 swapped to out self.token1
-    ///            1 - in self.token1 swapped to out self.token0
-    pub event Swap(inTokenAmount: UFix64, outTokenAmount: UFix64, direction: UInt8)
+    access(all) event Swap(amount0In: UFix64, amount1In: UFix64, amount0Out: UFix64, amount1Out: UFix64, reserve0After: UFix64, reserve1After: UFix64, amount0Type: String, amount1Type: String)
     /// Event that is emitted when a flashloan is originated from this SwapPair pool
-    pub event Flashloan(executor: Address, executorType: Type, originator: Address, requestedTokenKey: String, amount: UFix64)
+    access(all) event Flashloan(executor: Address, executorType: Type, originator: Address, requestedTokenType: String, requestedAmount: UFix64, reserve0After: UFix64, reserve1After: UFix64)
 
     /// Lptoken Vault
     ///
-    pub resource Vault: FungibleToken.Provider, FungibleToken.Receiver, FungibleToken.Balance {
+    access(all) resource Vault: FungibleToken.Vault {
         /// Holds the balance of a users tokens
-        pub var balance: UFix64
+        access(all) var balance: UFix64
 
         /// Initialize the balance at resource creation time
         init(balance: UFix64) {
             self.balance = balance
         }
+
+        /// Called when this SwapPair's LpToken is burned via the `Burner.burn()` method
+        access(contract) fun burnCallback() {
+            if self.balance > 0.0 {
+                SwapPair.totalSupply = SwapPair.totalSupply - self.balance
+            }
+            self.balance = 0.0
+        }
+
+        /// getSupportedVaultTypes optionally returns a list of vault types that this receiver accepts
+        access(all) view fun getSupportedVaultTypes(): {Type: Bool} {
+            return {self.getType(): true}
+        }
+
+        access(all) view fun isSupportedVaultType(type: Type): Bool {
+            if (type == self.getType()) { return true } else { return false }
+        }
+
+        /// Asks if the amount can be withdrawn from this vault
+        access(all) view fun isAvailableToWithdraw(amount: UFix64): Bool {
+            return amount <= self.balance
+        }
+
+        /// Added simply to conform to FT-V2 interface.
+        ///
+        /// SwapPair doesn't support MetadataViews api as this is not just a normal FT, and there could be multiple types of lpTokens
+        /// for different SwapPairs, so it is stored in LpTokenCollection instead (not directly associated with a StoragePath).
+        access(all) view fun getViews(): [Type] { return [] }
+        access(all) fun resolveView(_ view: Type): AnyStruct? { return nil }
 
         /// withdraw
         ///
@@ -76,9 +103,8 @@ pub contract SwapPair: FungibleToken {
         /// created Vault to the context that called so it can be deposited
         /// elsewhere.
         ///
-        pub fun withdraw(amount: UFix64): @FungibleToken.Vault {
+        access(FungibleToken.Withdraw) fun withdraw(amount: UFix64): @{FungibleToken.Vault} {
             self.balance = self.balance - amount
-            emit TokensWithdrawn(amount: amount, from: self.owner?.address)
             return <-create Vault(balance: amount)
         }
 
@@ -90,18 +116,58 @@ pub contract SwapPair: FungibleToken {
         /// was a temporary holder of the tokens. The Vault's balance has
         /// been consumed and therefore can be destroyed.
         ///
-        pub fun deposit(from: @FungibleToken.Vault) {
+        access(all) fun deposit(from: @{FungibleToken.Vault}) {
             let vault <- from as! @SwapPair.Vault
             self.balance = self.balance + vault.balance
-            emit TokensDeposited(amount: vault.balance, to: self.owner?.address)
             vault.balance = 0.0
             destroy vault
         }
 
-        destroy() {
-            SwapPair.totalSupply = SwapPair.totalSupply - self.balance
+        access(all) fun createEmptyVault(): @{FungibleToken.Vault} {
+            return <-create Vault(balance: 0.0)
         }
     }
+
+    access(all) struct PairInfo: SwapInterfaces.PairInfo {
+        access(all) let token0Key: String
+        access(all) let token1Key: String
+        access(all) let token0Reserve: UFix64
+        access(all) let token1Reserve: UFix64
+        access(all) let pairAddr: Address
+        access(all) let lpTokenSupply: UFix64
+        access(all) let swapFeeInBps: UInt64
+        access(all) let isStableswap: Bool
+        access(all) let stableCurveP: UFix64
+
+        view init(
+            _ token0Key: String,
+            _ token1Key: String,
+            _ token0Reserve: UFix64,
+            _ token1Reserve: UFix64,
+            _ pairAddr: Address,
+            _ lpTokenSupply: UFix64,
+            _ swapFeeInBps: UInt64,
+            _ isStableswap: Bool,
+            _ stableCurveP: UFix64
+        ) {
+            self.token0Key = token0Key
+            self.token1Key = token1Key
+            self.token0Reserve = token0Reserve
+            self.token1Reserve = token1Reserve
+            self.pairAddr = pairAddr
+            self.lpTokenSupply = lpTokenSupply
+            self.swapFeeInBps = swapFeeInBps
+            self.isStableswap = isStableswap
+            self.stableCurveP = stableCurveP
+        }
+    }
+
+    /// Added simply to conform to FT-V2 interface.
+    ///
+    /// SwapPair doesn't support MetadataViews api as this is not just a normal FT, and there could be multiple types of lpTokens
+    /// for different SwapPairs, so it is stored in LpTokenCollection instead (not directly associated with a StoragePath).
+    access(all) view fun getContractViews(resourceType: Type?): [Type] { return [] }
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? { return nil }
 
     /// createEmptyVault
     //
@@ -110,7 +176,7 @@ pub contract SwapPair: FungibleToken {
     /// and store the returned Vault in their storage in order to allow their
     /// account to be able to receive deposits of this token type.
     ///
-    pub fun createEmptyVault(): @FungibleToken.Vault {
+    access(all) fun createEmptyVault(vaultType: Type): @SwapPair.Vault {
         return <-create Vault(balance: 0.0)
     }
 
@@ -130,13 +196,14 @@ pub contract SwapPair: FungibleToken {
     /// Burn lpTokens
     access(self) fun burnLpToken(from: @SwapPair.Vault) {
         let amount = from.balance
+        self.totalSupply = self.totalSupply - amount
         destroy from
         emit TokensBurned(amount: amount)
     }
 
     /// Add liquidity
     ///
-    pub fun addLiquidity(tokenAVault: @FungibleToken.Vault, tokenBVault: @FungibleToken.Vault): @FungibleToken.Vault {
+    access(all) fun addLiquidity(tokenAVault: @{FungibleToken.Vault}, tokenBVault: @{FungibleToken.Vault}): @{FungibleToken.Vault} {
         pre {
             tokenAVault.balance > 0.0 && tokenBVault.balance > 0.0:
                 SwapError.ErrorEncode(
@@ -165,6 +232,8 @@ pub contract SwapPair: FungibleToken {
         let feeOn = self._mintFee(reserve0: self.token0Vault.balance, reserve1: self.token1Vault.balance)
 
         var liquidity = 0.0
+        var amount0Added = 0.0
+        var amount1Added = 0.0
         if (self.totalSupply == 0.0) {
             var donateLpBalance = 0.0
             if self.isStableSwap() {
@@ -181,9 +250,13 @@ pub contract SwapPair: FungibleToken {
             )
             /// Add initial liquidity
             if (tokenAVault.isInstance(self.token0VaultType)) {
+                amount0Added = tokenAVault.balance
+                amount1Added = tokenBVault.balance
                 self.token0Vault.deposit(from: <-tokenAVault)
                 self.token1Vault.deposit(from: <-tokenBVault)
             } else {
+                amount0Added = tokenBVault.balance
+                amount1Added = tokenAVault.balance
                 self.token0Vault.deposit(from: <-tokenBVault)
                 self.token1Vault.deposit(from: <-tokenAVault)
             }
@@ -204,25 +277,32 @@ pub contract SwapPair: FungibleToken {
             if (tokenAVault.isInstance(self.token0VaultType)) {
                 lptokenMintAmount0Scaled = inAmountAScaled * totalSupplyScaled / reserve0LastScaled
                 lptokenMintAmount1Scaled = inAmountBScaled * totalSupplyScaled / reserve1LastScaled
-                
+                amount0Added = tokenAVault.balance
+                amount1Added = tokenBVault.balance
                 self.token0Vault.deposit(from: <-tokenAVault)
                 self.token1Vault.deposit(from: <-tokenBVault)
             } else {
                 lptokenMintAmount0Scaled = inAmountBScaled * totalSupplyScaled / reserve0LastScaled
                 lptokenMintAmount1Scaled = inAmountAScaled * totalSupplyScaled / reserve1LastScaled
-
+                amount0Added = tokenBVault.balance
+                amount1Added = tokenAVault.balance
                 self.token0Vault.deposit(from: <-tokenBVault)
                 self.token1Vault.deposit(from: <-tokenAVault)
             }
 
             /// Note: User should add proportional liquidity as any extra is added into pool.
             let mintLptokenAmountScaled = lptokenMintAmount0Scaled < lptokenMintAmount1Scaled ? lptokenMintAmount0Scaled : lptokenMintAmount1Scaled
-            
+
             /// Mint liquidity token pro rata
             liquidity = SwapConfig.ScaledUInt256ToUFix64(mintLptokenAmountScaled)
         }
         /// Mint lpTokens
         let lpTokenVault <-self.mintLpToken(amount: liquidity)
+        emit LiquidityAdded(
+            amount0: amount0Added, amount1: amount1Added,
+            reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance,
+            amount0Type: self.token0Key, amount1Type: self.token1Key
+        )
 
         if feeOn {
             self.rootKLast = self._rootK(balance0: self.token0Vault.balance, balance1: self.token1Vault.balance)
@@ -236,7 +316,7 @@ pub contract SwapPair: FungibleToken {
     ///
     /// @Return: @[FungibleToken.Vault; 2]
     ///
-    pub fun removeLiquidity(lpTokenVault: @FungibleToken.Vault) : @[FungibleToken.Vault] {
+    access(all) fun removeLiquidity(lpTokenVault: @{FungibleToken.Vault}) : @[{FungibleToken.Vault}] {
         pre {
             lpTokenVault.balance > 0.0:
                 SwapError.ErrorEncode(
@@ -277,6 +357,11 @@ pub contract SwapPair: FungibleToken {
 
         /// Burn lpTokens
         self.burnLpToken(from: <- (lpTokenVault as! @SwapPair.Vault))
+        emit LiquidityRemoved(
+            amount0: withdrawnToken0.balance, amount1: withdrawnToken1.balance,
+            reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance,
+            amount0Type: self.token0Key, amount1Type: self.token1Key
+        )
 
         if feeOn {
             self.rootKLast = self._rootK(balance0: self.token0Vault.balance, balance1: self.token1Vault.balance)
@@ -288,7 +373,7 @@ pub contract SwapPair: FungibleToken {
 
     /// Swap
     ///
-    pub fun swap(vaultIn: @FungibleToken.Vault, exactAmountOut: UFix64?): @FungibleToken.Vault {
+    access(all) fun swap(vaultIn: @{FungibleToken.Vault}, exactAmountOut: UFix64?): @{FungibleToken.Vault} {
         pre {
             vaultIn.balance > 0.0: SwapError.ErrorEncode(msg: "SwapPair: zero in balance", err: SwapError.ErrorCode.INVALID_PARAMETERS)
             vaultIn.isInstance(self.token0VaultType) || vaultIn.isInstance(self.token1VaultType):
@@ -305,19 +390,20 @@ pub contract SwapPair: FungibleToken {
 
         self._update(reserve0Last: self.token0Vault.balance, reserve1Last: self.token1Vault.balance)
 
+        let amountIn = vaultIn.balance
         var amountOut = 0.0
         /// Calculate the swap result
         if (vaultIn.isInstance(self.token0VaultType)) {
             if self.isStableSwap() {
-                amountOut = SwapConfig.getAmountOutStable(amountIn: vaultIn.balance, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, p: self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutStable(amountIn: amountIn, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, p: self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
             } else {
-                amountOut = SwapConfig.getAmountOutVolatile(amountIn: vaultIn.balance, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutVolatile(amountIn: amountIn, reserveIn: self.token0Vault.balance, reserveOut: self.token1Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
             }
         } else {
             if self.isStableSwap() {
-                amountOut = SwapConfig.getAmountOutStable(amountIn: vaultIn.balance, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, p: 1.0/self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutStable(amountIn: amountIn, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, p: 1.0/self.getStableCurveP(), swapFeeRateBps: self.getSwapFeeBps())
             } else {
-                amountOut = SwapConfig.getAmountOutVolatile(amountIn: vaultIn.balance, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
+                amountOut = SwapConfig.getAmountOutVolatile(amountIn: amountIn, reserveIn: self.token1Vault.balance, reserveOut: self.token0Vault.balance, swapFeeRateBps: self.getSwapFeeBps())
             }
         }
         /// Check and swap exact output amount if specified in argument
@@ -332,15 +418,23 @@ pub contract SwapPair: FungibleToken {
         }
 
         if (vaultIn.isInstance(self.token0VaultType)) {
-            emit Swap(inTokenAmount: vaultIn.balance, outTokenAmount: amountOut, direction: 0)
             self.token0Vault.deposit(from: <-vaultIn)
-
+            emit Swap(
+                amount0In: amountIn, amount1In: 0.0,
+                amount0Out: 0.0, amount1Out: amountOut,
+                reserve0After: self.token0Vault.balance, reserve1After: self.token1Vault.balance - amountOut,
+                amount0Type: self.token0Key, amount1Type: self.token1Key
+            )
             self.lock = false
             return <- self.token1Vault.withdraw(amount: amountOut)
         } else {
-            emit Swap(inTokenAmount: vaultIn.balance, outTokenAmount: amountOut, direction: 1)
             self.token1Vault.deposit(from: <-vaultIn)
-
+            emit Swap(
+                amount0In: 0.0, amount1In: amountIn,
+                amount0Out: amountOut, amount1Out: 0.0,
+                reserve0After: self.token0Vault.balance - amountOut, reserve1After: self.token1Vault.balance,
+                amount0Type: self.token0Key, amount1Type: self.token1Key
+            )
             self.lock = false
             return <- self.token0Vault.withdraw(amount: amountOut)
         }
@@ -352,7 +446,7 @@ pub contract SwapPair: FungibleToken {
     /// all in one atomic function call.
     /// @params: User-definited extra data passed to executor for further auth/check/decode
     ///
-    pub fun flashloan(executorCap: Capability<&{SwapInterfaces.FlashLoanExecutor}>, requestedTokenVaultType: Type, requestedAmount: UFix64, params: {String: AnyStruct}) {
+    access(all) fun flashloan(executor: &{SwapInterfaces.FlashLoanExecutor}, requestedTokenVaultType: Type, requestedAmount: UFix64, params: {String: AnyStruct}) {
         pre {
             requestedTokenVaultType == self.token0VaultType || requestedTokenVaultType == self.token1VaultType:
                 SwapError.ErrorEncode(
@@ -365,11 +459,6 @@ pub contract SwapPair: FungibleToken {
                     msg: "SwapPair: flashloan invalid requested amount",
                     err: SwapError.ErrorCode.INVALID_PARAMETERS
                 )
-            executorCap.check():
-                SwapError.ErrorEncode(
-                    msg: "SwapPair: flashloan executor resource not properly setup",
-                    err: SwapError.ErrorCode.FLASHLOAN_EXECUTOR_SETUP
-                )
             self.lock == false: SwapError.ErrorEncode(msg: "SwapPair: Reentrant", err: SwapError.ErrorCode.REENTRANT)
         }
         post {
@@ -379,15 +468,14 @@ pub contract SwapPair: FungibleToken {
 
         self._update(reserve0Last: self.token0Vault.balance, reserve1Last: self.token1Vault.balance)
 
-        var tokenOut: @FungibleToken.Vault? <- nil
+        var tokenOut: @{FungibleToken.Vault}? <- nil
         if (requestedTokenVaultType == self.token0VaultType) {
             tokenOut <-! self.token0Vault.withdraw(amount: requestedAmount)
         } else {
             tokenOut <-! self.token1Vault.withdraw(amount: requestedAmount)
         }
         // Send loans and invoke custom executor
-        let executorRef = executorCap.borrow()!
-        let tokenIn <- executorRef.executeAndRepay(loanedToken: <- tokenOut!, params: params)
+        let tokenIn <- executor.executeAndRepay(loanedToken: <- tokenOut!, params: params)
         assert(tokenIn.isInstance(requestedTokenVaultType), message:
             SwapError.ErrorEncode(
                 msg: "SwapPair: flashloan repaid incompatible token",
@@ -406,7 +494,15 @@ pub contract SwapPair: FungibleToken {
             self.token1Vault.deposit(from: <- tokenIn)
         }
 
-        emit Flashloan(executor: executorRef.owner!.address, executorType: executorRef.getType(), originator: self.account.address, requestedTokenKey: requestedTokenVaultType == self.token0VaultType ? self.token0Key : self.token1Key, amount: requestedAmount)
+        emit Flashloan(
+            executor: executor.owner!.address,
+            executorType: executor.getType(),
+            originator: self.account.address,
+            requestedTokenType: requestedTokenVaultType == self.token0VaultType ? self.token0Key : self.token1Key,
+            requestedAmount: requestedAmount,
+            reserve0After: self.token0Vault.balance,
+            reserve1After: self.token1Vault.balance
+        )
 
         self.lock = false
     }
@@ -462,7 +558,7 @@ pub contract SwapPair: FungibleToken {
                 let liquidity = numerator / denominator
                 if liquidity > 0.0 {
                     let lpTokenVault <-self.mintLpToken(amount: liquidity)
-                    let lpTokenCollectionCap = getAccount(SwapFactory.feeTo!).getCapability<&{SwapInterfaces.LpTokenCollectionPublic}>(SwapConfig.LpTokenCollectionPublicPath)
+                    let lpTokenCollectionCap = getAccount(SwapFactory.feeTo!).capabilities.get<&{SwapInterfaces.LpTokenCollectionPublic}>(SwapConfig.LpTokenCollectionPublicPath)
                     assert(lpTokenCollectionCap.check(), message:
                         SwapError.ErrorEncode(
                             msg: "SwapPair: Cannot borrow reference to LpTokenCollection resource in feeTo account",
@@ -476,7 +572,7 @@ pub contract SwapPair: FungibleToken {
         return true
     }
 
-    pub fun _rootK(balance0: UFix64, balance1: UFix64): UFix64 {
+    access(all) view fun _rootK(balance0: UFix64, balance1: UFix64): UFix64 {
         let e18: UInt256 = SwapConfig.scaleFactor
         let balance0Scaled = SwapConfig.UFix64ToScaledUInt256(balance0)
         let balance1Scaled = SwapConfig.UFix64ToScaledUInt256(balance1)
@@ -489,38 +585,38 @@ pub contract SwapPair: FungibleToken {
         }
     }
 
-    pub fun isStableSwap(): Bool {
+    access(all) view fun isStableSwap(): Bool {
         return (self._reservedFields["isStableSwap"] as! Bool?) ?? false
     }
 
-    pub fun getSwapFeeBps(): UInt64 {
+    access(all) view fun getSwapFeeBps(): UInt64 {
         return SwapFactory.getSwapFeeRateBps(stableMode: self.isStableSwap())
     }
 
-    pub fun getStableCurveP(): UFix64 {
+    access(all) view fun getStableCurveP(): UFix64 {
         return 1.0
     }
 
     /// Public interfaces
     ///
-    pub resource PairPublic: SwapInterfaces.PairPublic {
-        pub fun swap(vaultIn: @FungibleToken.Vault, exactAmountOut: UFix64?): @FungibleToken.Vault {
+    access(all) resource PairPublic: SwapInterfaces.PairPublic {
+        access(all) fun swap(vaultIn: @{FungibleToken.Vault}, exactAmountOut: UFix64?): @{FungibleToken.Vault} {
             return <- SwapPair.swap(vaultIn: <-vaultIn, exactAmountOut: exactAmountOut)
         }
 
-        pub fun flashloan(executorCap: Capability<&{SwapInterfaces.FlashLoanExecutor}>, requestedTokenVaultType: Type, requestedAmount: UFix64, params: {String: AnyStruct}) {
-            SwapPair.flashloan(executorCap: executorCap, requestedTokenVaultType: requestedTokenVaultType, requestedAmount: requestedAmount, params: params)
+        access(all) fun flashloan(executor: &{SwapInterfaces.FlashLoanExecutor}, requestedTokenVaultType: Type, requestedAmount: UFix64, params: {String: AnyStruct}) {
+            SwapPair.flashloan(executor: executor, requestedTokenVaultType: requestedTokenVaultType, requestedAmount: requestedAmount, params: params)
         }
 
-        pub fun removeLiquidity(lpTokenVault: @FungibleToken.Vault) : @[FungibleToken.Vault] {
+        access(all) fun removeLiquidity(lpTokenVault: @{FungibleToken.Vault}) : @[{FungibleToken.Vault}] {
             return <- SwapPair.removeLiquidity(lpTokenVault: <- lpTokenVault)
         }
 
-        pub fun addLiquidity(tokenAVault: @FungibleToken.Vault, tokenBVault: @FungibleToken.Vault): @FungibleToken.Vault {
+        access(all) fun addLiquidity(tokenAVault: @{FungibleToken.Vault}, tokenBVault: @{FungibleToken.Vault}): @{FungibleToken.Vault} {
             return <- SwapPair.addLiquidity(tokenAVault: <- tokenAVault, tokenBVault: <- tokenBVault)
         }
 
-        pub fun getAmountIn(amountOut: UFix64, tokenOutKey: String): UFix64 {
+        access(all) view fun getAmountIn(amountOut: UFix64, tokenOutKey: String): UFix64 {
             if SwapPair.isStableSwap() {
                 if tokenOutKey == SwapPair.token1Key {
                     return SwapConfig.getAmountInStable(amountOut: amountOut, reserveIn: SwapPair.token0Vault.balance, reserveOut: SwapPair.token1Vault.balance, p: SwapPair.getStableCurveP(), swapFeeRateBps: SwapPair.getSwapFeeBps())
@@ -535,7 +631,7 @@ pub contract SwapPair: FungibleToken {
                 }
             }
         }
-        pub fun getAmountOut(amountIn: UFix64, tokenInKey: String): UFix64 {
+        access(all) view fun getAmountOut(amountIn: UFix64, tokenInKey: String): UFix64 {
             if SwapPair.isStableSwap() {
                 if tokenInKey == SwapPair.token0Key {
                     return SwapConfig.getAmountOutStable(amountIn: amountIn, reserveIn: SwapPair.token0Vault.balance, reserveOut: SwapPair.token1Vault.balance, p: SwapPair.getStableCurveP(), swapFeeRateBps: SwapPair.getSwapFeeBps())
@@ -550,17 +646,17 @@ pub contract SwapPair: FungibleToken {
                 }
             }
         }
-        pub fun getPrice0CumulativeLastScaled(): UInt256 {
+        access(all) view fun getPrice0CumulativeLastScaled(): UInt256 {
             return SwapPair.price0CumulativeLastScaled
         }
-        pub fun getPrice1CumulativeLastScaled(): UInt256 {
+        access(all) view fun getPrice1CumulativeLastScaled(): UInt256 {
             return SwapPair.price1CumulativeLastScaled
         }
-        pub fun getBlockTimestampLast(): UFix64 {
+        access(all) view fun getBlockTimestampLast(): UFix64 {
             return SwapPair.blockTimestampLast
         }
 
-        pub fun getPairInfo(): [AnyStruct] {
+        access(all) view fun getPairInfo(): [AnyStruct] {
             return [
                 SwapPair.token0Key,            // 0
                 SwapPair.token1Key,
@@ -574,20 +670,34 @@ pub contract SwapPair: FungibleToken {
             ]
         }
 
-        pub fun getLpTokenVaultType(): Type {
+        access(all) view fun getPairInfoStruct(): PairInfo {
+            return PairInfo(
+                SwapPair.token0Key,
+                SwapPair.token1Key,
+                SwapPair.token0Vault.balance,
+                SwapPair.token1Vault.balance,
+                SwapPair.account.address,
+                SwapPair.totalSupply,
+                SwapPair.getSwapFeeBps(),
+                SwapPair.isStableSwap(),
+                SwapPair.getStableCurveP()
+            )
+        }
+
+        access(all) view fun getLpTokenVaultType(): Type {
             return Type<@SwapPair.Vault>()
         }
 
-        pub fun isStableSwap(): Bool {
+        access(all) view fun isStableSwap(): Bool {
             return SwapPair.isStableSwap()
         }
 
-        pub fun getStableCurveP(): UFix64 {
+        access(all) view fun getStableCurveP(): UFix64 {
             return SwapPair.getStableCurveP()
         }
     }
 
-    init(token0Vault: @FungibleToken.Vault, token1Vault: @FungibleToken.Vault, stableMode: Bool) {
+    init(token0Vault: @{FungibleToken.Vault}, token1Vault: @{FungibleToken.Vault}, stableMode: Bool) {
         self.totalSupply = 0.0
 
         self.token0VaultType = token0Vault.getType()
@@ -608,11 +718,11 @@ pub contract SwapPair: FungibleToken {
         self.token0Key = SwapConfig.SliceTokenTypeIdentifierFromVaultType(vaultTypeIdentifier: self.token0VaultType.identifier)
         self.token1Key = SwapConfig.SliceTokenTypeIdentifierFromVaultType(vaultTypeIdentifier: self.token1VaultType.identifier)
 
-        /// Open public interface capability
-        destroy <-self.account.load<@AnyResource>(from: /storage/pair_public)
-        self.account.save(<-create PairPublic(), to: /storage/pair_public)
-        /// Pair interface public path: SwapConfig.PairPublicPath
-        self.account.link<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath, target: /storage/pair_public)                
+        /// Setup PairPublic interface capability
+        destroy <-self.account.storage.load<@AnyResource>(from: /storage/pair_public)
+        self.account.storage.save(<-create PairPublic(), to: /storage/pair_public)
+        let pairPublicCap = self.account.capabilities.storage.issue<&{SwapInterfaces.PairPublic}>(/storage/pair_public)
+        self.account.capabilities.publish(pairPublicCap, at: SwapConfig.PairPublicPath)
 
         emit TokensInitialized(initialSupply: self.totalSupply)
     }

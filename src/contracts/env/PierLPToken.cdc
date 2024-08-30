@@ -9,43 +9,43 @@ the `tokenId` of the LP token equals to the `poolId` of the pool.
 @author Metapier Foundation Ltd.
 
  */
-pub contract PierLPToken: MultiFungibleToken {
+access(all) contract PierLPToken: MultiFungibleToken {
 
     // Event that is emitted when the contract is created
-    pub event ContractInitialized()
+    access(all) event ContractInitialized()
 
     // Event that is emitted when tokens are minted
-    pub event TokensMinted(tokenId: UInt64, amount: UFix64)
+    access(all) event TokensMinted(tokenId: UInt64, amount: UFix64)
 
     // Event that is emitted when tokens are burned
-    pub event TokensBurned(tokenId: UInt64, amount: UFix64)
+    access(all) event TokensBurned(tokenId: UInt64, amount: UFix64)
 
     // Event that is emitted when tokens are withdrawn from a Vault of some token ID
-    pub event TokensWithdrawn(tokenId: UInt64, amount: UFix64, from: Address?)
+    access(all) event TokensWithdrawn(tokenId: UInt64, amount: UFix64, from: Address?)
 
     // Event that is emitted when tokens are deposited into a Vault of some token ID
-    pub event TokensDeposited(tokenId: UInt64, amount: UFix64, to: Address?)
+    access(all) event TokensDeposited(tokenId: UInt64, amount: UFix64, to: Address?)
 
     // Event that is emitted when a new TokenMaster resource is created
-    pub event TokenMasterCreated(tokenId: UInt64)
+    access(all) event TokenMasterCreated(tokenId: UInt64)
 
     // The common storage path for storing a PierLPToken.Collection
-    pub let CollectionStoragePath: StoragePath
+    access(all) let CollectionStoragePath: StoragePath
 
     // The common public path for linking to the PierLPToken.Collection{MultiFungibleToken.CollectionPublic}
-    pub let CollectionPublicPath: PublicPath
+    access(all) let CollectionPublicPath: PublicPath
 
     // A mapping from token ID to the corresponding total supply
     access(contract) let totalSupply: {UInt64: UFix64}
 
     // PierLPToken Vault
-    pub resource Vault: MultiFungibleToken.Receiver, MultiFungibleToken.View {
+    access(all) resource Vault: MultiFungibleToken.Vault {
 
         // The total balance of the Vault
-        pub var balance: UFix64
+        access(all) var balance: UFix64
 
         // The liquidity pool id that the Vault corresponds to
-        pub let tokenId: UInt64
+        access(all) let tokenId: UInt64
 
         // Vault initializer
         //
@@ -61,7 +61,7 @@ pub contract PierLPToken: MultiFungibleToken {
         //
         // @param amount The amount of tokens to withdraw
         // @return A new Vault (of the same token id) that contains the requested amount of tokens
-        pub fun withdraw(amount: UFix64): @PierLPToken.Vault {
+        access(MultiFungibleToken.Withdraw) fun withdraw(amount: UFix64): @PierLPToken.Vault {
             self.balance = self.balance - amount
             emit TokensWithdrawn(tokenId: self.tokenId, amount: amount, from: self.owner?.address)
             return <- create Vault(tokenId: self.tokenId, balance: amount)
@@ -71,27 +71,19 @@ pub contract PierLPToken: MultiFungibleToken {
         // balance to the balance of this Vault
         //
         // @param from A Vault that is ready to have its balance added to this Vault
-        pub fun deposit(from: @MultiFungibleToken.Vault) {
+        access(all) fun deposit(from: @{MultiFungibleToken.Vault}) {
             let vault <- from as! @Vault
             self.balance = self.balance + vault.balance
             emit TokensDeposited(tokenId: self.tokenId, amount: vault.balance, to: self.owner?.address)
             // no need to reset the vault's balance because destroy() do not change the total supply
             destroy vault
         }
-
-        destroy() {
-            // Destroys a non-empty Vault will not affect the total supply but lock the balance forever instead
-        }
     }
 
     // A collection to help with storing and organizing multiple LP tokens.
-    pub resource Collection: 
-        MultiFungibleToken.Provider, 
-        MultiFungibleToken.Receiver, 
-        MultiFungibleToken.CollectionPublic 
-    {
+    access(all) resource Collection: MultiFungibleToken.Collection {
         // A mapping from token id (pool id) to LP token Vault
-        pub var vaults: @{UInt64: PierLPToken.Vault}
+        access(all) var vaults: @{UInt64: PierLPToken.Vault}
 
         // For a given token id, subtracts the amount of tokens from the corresponding Vault
         // in the collection and returns a Vault with the token id and the subtracted balance.
@@ -102,12 +94,12 @@ pub contract PierLPToken: MultiFungibleToken {
         // @param tokenId The token id (pool id) of the Vault from which to withdraw
         // @param amount The amount of tokens to withdraw
         // @return A new Vault (of the same token id) that contains the requested amount of tokens
-        pub fun withdraw(tokenId: UInt64, amount: UFix64): @PierLPToken.Vault {
+        access(MultiFungibleToken.Withdraw) fun withdraw(tokenId: UInt64, amount: UFix64): @PierLPToken.Vault {
             if !self.vaults.containsKey(tokenId) {
                 self.vaults[tokenId] <-! PierLPToken.createEmptyVault(tokenId: tokenId)
             }
 
-            let vault = (&self.vaults[tokenId] as &PierLPToken.Vault?)!
+            let vault = (&self.vaults[tokenId] as auth(MultiFungibleToken.Withdraw) &PierLPToken.Vault?)!
             return <- vault.withdraw(amount: amount)
         }
 
@@ -118,7 +110,7 @@ pub contract PierLPToken: MultiFungibleToken {
         //  contain the given LP token.
         //
         // @param from The LP token Vault to deposit into the collection
-        pub fun deposit(from: @MultiFungibleToken.Vault) {
+        access(all) fun deposit(from: @{MultiFungibleToken.Vault}) {
             if from.balance == 0.0 {
                 // ignore zero-balance vaults to prevent spamming
                 destroy from
@@ -138,7 +130,7 @@ pub contract PierLPToken: MultiFungibleToken {
         // empty ones.
         //
         // @return An array of the token ids of all vaults stored in the collection.
-        pub fun getTokenIds(): [UInt64] {
+        access(all) view fun getTokenIds(): [UInt64] {
             return self.vaults.keys
         }
 
@@ -146,7 +138,7 @@ pub contract PierLPToken: MultiFungibleToken {
         // 
         // @return `true` iff the internal `vaults` contains a Vault of the
         //  requested token id ()
-        pub fun hasToken(tokenId: UInt64): Bool {
+        access(all) view fun hasToken(tokenId: UInt64): Bool {
             return self.vaults.containsKey(tokenId)
         }
  
@@ -157,29 +149,24 @@ pub contract PierLPToken: MultiFungibleToken {
         // @param tokenId The token id (pool id) of the Vault to query
         // @return A Vault reference of the requested token id, which exposes only
         //  the Receiver and View
-        pub fun getPublicVault(tokenId: UInt64):
-            &PierLPToken.Vault{MultiFungibleToken.Receiver, MultiFungibleToken.View}
+        access(all) view fun getPublicVault(tokenId: UInt64):
+            &{MultiFungibleToken.Receiver, MultiFungibleToken.View}
         {
-            return (&self.vaults[tokenId] as &PierLPToken.Vault{MultiFungibleToken.Receiver, MultiFungibleToken.View}?)!
+            return (&self.vaults[tokenId] as &{MultiFungibleToken.Receiver, MultiFungibleToken.View}?)!
         }
 
         // Initializes the Collection
         init() {
             self.vaults <- {}
         }
-
-        // Destroys the Collection and permanently locks all the stored LP tokens (if there are any) 
-        destroy() {
-            destroy self.vaults
-        }
     }
 
     // TokenMaster is a resource to manage the LP token supply for
     // one specific liquidity pool
-    pub resource TokenMaster {
+    access(all) resource TokenMaster {
 
         // The id of the LP token this TokenMaster can manage
-        pub let tokenId: UInt64
+        access(all) let tokenId: UInt64
 
         // Mints the given amount of LP tokens and returns a Vault
         // that stores the minted tokens.
@@ -187,7 +174,7 @@ pub contract PierLPToken: MultiFungibleToken {
         // @param amount The amount of tokens to mint and return
         // @return A Vault that contains the requested amount of LP
         //  tokens (of the predefined token id)
-        pub fun mintTokens(amount: UFix64): @PierLPToken.Vault {
+        access(all) fun mintTokens(amount: UFix64): @PierLPToken.Vault {
             pre {
                 amount > 0.0: "Metapier PierLPToken: Amount to mint must be greater than zero"
             }
@@ -203,7 +190,7 @@ pub contract PierLPToken: MultiFungibleToken {
         //
         // @param vault The LP token Vault to burn (must have the 
         //  expected token id)
-        pub fun burnTokens(vault: @PierLPToken.Vault) {
+        access(all) fun burnTokens(vault: @PierLPToken.Vault) {
             pre {
                 self.tokenId == vault.tokenId: "Metapier PierLPToken: Cannot burn other LP tokens"
             }
@@ -223,7 +210,7 @@ pub contract PierLPToken: MultiFungibleToken {
     }
 
     // Admin is a resource for initializing new LP tokens
-    pub resource Admin {
+    access(all) resource Admin {
 
         // Initializes a new LP token and returns a TokenMaster for
         // managing its total supply. Will throw an error if the token
@@ -232,7 +219,7 @@ pub contract PierLPToken: MultiFungibleToken {
         // @param tokenId The id of the new LP token
         // @return A TokenMaster for the new LP token (implied by 
         //  token id)
-        pub fun initNewLPToken(tokenId: UInt64): @TokenMaster {
+        access(all) fun initNewLPToken(tokenId: UInt64): @TokenMaster {
             pre {
                 !PierLPToken.totalSupply.containsKey(tokenId): "Metapier PierLPToken: LP Token already exists"
             }
@@ -246,7 +233,7 @@ pub contract PierLPToken: MultiFungibleToken {
     // Creates an empty collection
     //
     // @return A new empty Collection
-    pub fun createEmptyCollection(): @PierLPToken.Collection {
+    access(all) fun createEmptyCollection(): @PierLPToken.Collection {
         return <- create Collection()
     }
 
@@ -255,7 +242,7 @@ pub contract PierLPToken: MultiFungibleToken {
     //
     // @param tokenId The token id (pool id) the new Vault is associate with
     // @return A new empty Vault of the requested token id
-    pub fun createEmptyVault(tokenId: UInt64): @PierLPToken.Vault {
+    access(all) fun createEmptyVault(tokenId: UInt64): @PierLPToken.Vault {
         return <- create Vault(tokenId: tokenId, balance: 0.0)
     }
 
@@ -265,7 +252,7 @@ pub contract PierLPToken: MultiFungibleToken {
     // @param tokenId The token id (pool id) to query
     // @return The total supply of the requested token id, or nil if the
     //  token doesn't exist
-    pub fun getTotalSupply(tokenId: UInt64): UFix64? {
+    access(all) view fun getTotalSupply(tokenId: UInt64): UFix64? {
         return self.totalSupply[tokenId]
     }
 
@@ -277,7 +264,7 @@ pub contract PierLPToken: MultiFungibleToken {
         self.totalSupply = {}
 
         let admin <- create Admin()
-        self.account.save(<- admin, to: /storage/metapierLPTokenAdmin)
+        self.account.storage.save(<- admin, to: /storage/metapierLPTokenAdmin)
 
         emit ContractInitialized()
     }

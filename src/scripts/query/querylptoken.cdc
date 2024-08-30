@@ -2,9 +2,9 @@ import SwapFactory from "../../contracts/SwapFactory.cdc"
 import SwapConfig from "../../contracts/SwapConfig.cdc"
 import SwapInterfaces from "../../contracts/SwapInterfaces.cdc"
 
-pub fun main(userAddr: Address): {Address: UFix64} {
+access(all) fun main(userAddr: Address): {Address: UFix64} {
     var lpTokenCollectionPublicPath = SwapConfig.LpTokenCollectionPublicPath
-    let lpTokenCollectionCap = getAccount(userAddr).getCapability<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionPublicPath)
+    let lpTokenCollectionCap = getAccount(userAddr).capabilities.get<&{SwapInterfaces.LpTokenCollectionPublic}>(lpTokenCollectionPublicPath)
     if lpTokenCollectionCap.check() == false {
         return {}
     }

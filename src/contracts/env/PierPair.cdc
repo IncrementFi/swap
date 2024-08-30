@@ -1,4 +1,4 @@
-import FungibleToken from "../tokens/FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
 import MultiFungibleToken from "./MultiFungibleToken.cdc" // 0xa378eeb799df8387
 import PierLPToken from "./PierLPToken.cdc" // 0x609e10301860b683
 import IPierPair from "./IPierPair.cdc" // 0x609e10301860b683
@@ -12,42 +12,42 @@ PierPair is the implementation of IPierPair.
 @author Metapier Foundation Ltd.
 
  */
-pub contract PierPair: IPierPair {
+access(all) contract PierPair: IPierPair {
 
     // The initial liquidity that will be minted and locked
     // by the pool. It's fixed to 1e-5.
-    pub let MINIMUM_LIQUIDITY: UFix64
+    access(all) let MINIMUM_LIQUIDITY: UFix64
 
-    pub event ContractInitialized()
-    pub event Swap(poolId: UInt64, amountIn: UFix64, amountOut: UFix64, swapAForB: Bool)
-    pub event Mint(poolId: UInt64, amountAIn: UFix64, amountBIn: UFix64)
-    pub event Burn(poolId: UInt64, amountLP: UFix64, amountAOut: UFix64, amountBOut: UFix64)
+    access(all) event ContractInitialized()
+    access(all) event Swap(poolId: UInt64, amountIn: UFix64, amountOut: UFix64, swapAForB: Bool)
+    access(all) event Mint(poolId: UInt64, amountAIn: UFix64, amountBIn: UFix64)
+    access(all) event Burn(poolId: UInt64, amountLP: UFix64, amountAOut: UFix64, amountBOut: UFix64)
 
     access(self) let lpTokenAdmin: @PierLPToken.Admin
     
-    pub resource Pool: IPierPair.IPool {
-        pub let poolId: UInt64
-        pub var kLast: UInt256
+    access(all) resource Pool: IPierPair.IPool {
+        access(all) let poolId: UInt64
+        access(all) var kLast: UInt256
 
-        pub let tokenAType: Type
-        pub let tokenBType: Type
+        access(all) let tokenAType: Type
+        access(all) let tokenBType: Type
 
-        pub var lastBlockTimestamp: UFix64
-        pub var lastPriceACumulative: Word64
-        pub var lastPriceBCumulative: Word64
+        access(all) var lastBlockTimestamp: UFix64
+        access(all) var lastPriceACumulative: Word64
+        access(all) var lastPriceBCumulative: Word64
 
         // Lock to prevent reentrancy attacks
         access(self) var lock: Bool
 
-        access(self) let tokenAVault: @FungibleToken.Vault
-        access(self) let tokenBVault: @FungibleToken.Vault
+        access(self) let tokenAVault: @{FungibleToken.Vault}
+        access(self) let tokenBVault: @{FungibleToken.Vault}
         access(self) let lpTokenMaster: @PierLPToken.TokenMaster
 
-        pub fun getReserves(): [UFix64; 2] {
+        access(all) view fun getReserves(): [UFix64; 2] {
             return [self.tokenAVault.balance, self.tokenBVault.balance]
         }
 
-        pub fun swap(fromVault: @FungibleToken.Vault, forAmount: UFix64): @FungibleToken.Vault {
+        access(all) fun swap(fromVault: @{FungibleToken.Vault}, forAmount: UFix64): @{FungibleToken.Vault} {
             pre {
                 !self.lock: "Metapier PierPair: Reentrant call"
             }
@@ -62,7 +62,7 @@ pub contract PierPair: IPierPair {
             let swapAForB = fromVault.isInstance(self.tokenAType)
             var amountAIn = 0.0
             var amountBIn = 0.0
-            var outputVault: @FungibleToken.Vault? <- nil
+            var outputVault: @{FungibleToken.Vault}? <- nil
 
             if swapAForB {
                 assert(reserveBLast > forAmount, message: "Metapier PierPair: Insufficient liquidity")
@@ -109,7 +109,7 @@ pub contract PierPair: IPierPair {
             return <-outputVault!
         }
 
-        pub fun mint(vaultA: @FungibleToken.Vault, vaultB: @FungibleToken.Vault): @PierLPToken.Vault {
+        access(all) fun mint(vaultA: @{FungibleToken.Vault}, vaultB: @{FungibleToken.Vault}): @PierLPToken.Vault {
             pre {
                 !self.lock: "Metapier PierPair: Reentrant call"
             }
@@ -171,7 +171,7 @@ pub contract PierPair: IPierPair {
             return <-lpTokenVault
         }
 
-        pub fun burn(lpTokenVault: @PierLPToken.Vault): @[FungibleToken.Vault; 2]  {
+        access(all) fun burn(lpTokenVault: @PierLPToken.Vault): @[{FungibleToken.Vault}; 2]  {
             pre {
                 !self.lock: "Metapier PierPair: Reentrant call"
             }
@@ -205,7 +205,7 @@ pub contract PierPair: IPierPair {
             // burn LP tokens
             self.lpTokenMaster.burnTokens(vault: <-lpTokenVault)
 
-            let outputTokens: @[FungibleToken.Vault; 2]  <-[
+            let outputTokens: @[{FungibleToken.Vault}; 2]  <-[
                 <-self.tokenAVault.withdraw(amount: PierMath.rawUInt256ToUFix64(amountA)),
                 <-self.tokenBVault.withdraw(amount: PierMath.rawUInt256ToUFix64(amountB))
             ]
@@ -288,8 +288,8 @@ pub contract PierPair: IPierPair {
         }
 
         init(
-            vaultA: @FungibleToken.Vault,
-            vaultB: @FungibleToken.Vault,
+            vaultA: @{FungibleToken.Vault},
+            vaultB: @{FungibleToken.Vault},
             lpTokenMaster: @PierLPToken.TokenMaster,
             poolId: UInt64
         ) {
@@ -315,19 +315,13 @@ pub contract PierPair: IPierPair {
 
             self.lock = false
         }
-
-        destroy() {
-            destroy self.tokenAVault
-            destroy self.tokenBVault
-            destroy self.lpTokenMaster
-        }
     }
     
     // Creates a new pool resource.
     // This function is only accessible to code in the same account.
     access(all) fun createPool(        
-        vaultA: @FungibleToken.Vault,
-        vaultB: @FungibleToken.Vault,
+        vaultA: @{FungibleToken.Vault},
+        vaultB: @{FungibleToken.Vault},
         poolId: UInt64
     ): @Pool {
         return <-create PierPair.Pool(
@@ -337,12 +331,12 @@ pub contract PierPair: IPierPair {
             poolId: poolId
         )
     }
-    
+
     init() {
         self.MINIMUM_LIQUIDITY = 0.00001
 
         // requires PierLPToken to be deployed to the same account
-        self.lpTokenAdmin <-self.account.load<@PierLPToken.Admin>(from: /storage/metapierLPTokenAdmin)
+        self.lpTokenAdmin <-self.account.storage.load<@PierLPToken.Admin>(from: /storage/metapierLPTokenAdmin)
             ?? panic("Metapier PierPair: Cannot load LP token admin")
 
         emit ContractInitialized()

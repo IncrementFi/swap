@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import SwapRouter from "../../contracts/SwapRouter.cdc"
 
 transaction(
@@ -7,14 +7,16 @@ transaction(
     exactAmountOut: UFix64,
     deadline: UFix64
 ) {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(BorrowValue) &Account) {
         let tokenInVaultPath = /storage/flowTokenVault
         let tokenOutVaultPath = /storage/fusdVault
         
-        var tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
-        
-        let vaultInRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenInVaultPath)
-        let vaultInMax <- vaultInRef!.withdraw(amount: amountInMax)
+        var tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
+            ?? panic("cannot borrow reference to tokenOut FT.Vault")
+
+        let vaultInRef = userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: tokenInVaultPath)
+            ?? panic("cannot borrow reference to tokenIn FT.Vault")
+        let vaultInMax <- vaultInRef.withdraw(amount: amountInMax)
 
         let swapResVault <- SwapRouter.swapTokensForExactTokens(
             vaultInMax: <-vaultInMax,
@@ -26,7 +28,7 @@ transaction(
         let vaultInLeft <- swapResVault.removeLast()
         destroy swapResVault
 
-        tokenOutReceiverRef!.deposit(from: <-vaultOut)
-        vaultInRef!.deposit(from: <-vaultInLeft)
+        tokenOutReceiverRef.deposit(from: <-vaultOut)
+        vaultInRef.deposit(from: <-vaultInLeft)
     }
 }

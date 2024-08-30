@@ -1,4 +1,4 @@
-import FungibleToken from "../../contracts/tokens/FungibleToken.cdc"
+import FungibleToken from "../../contracts/env/FungibleToken.cdc"
 import FlowToken from "../../contracts/tokens/FlowToken.cdc"
 import TeleportedTetherToken from "../../contracts/tokens/TeleportedTetherToken.cdc"
 import FiatToken from "../../contracts/tokens/FiatToken.cdc"
@@ -22,7 +22,9 @@ import BltUsdtSwapPair from "../../contracts/env/BltUsdtSwapPair.cdc"
 import StarlyUsdtSwapPair from "../../contracts/env/StarlyUsdtSwapPair.cdc"
 import RevvFlowSwapPair from "../../contracts/env/RevvFlowSwapPair.cdc"
 
-pub fun getBloctoAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
+import LogEntry from "../../contracts/env/LogEntry.cdc"
+
+access(all) fun getBloctoAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
     let amountIn = reserveIn * amountOut / (reserveOut - amountOut) / (1.0 - UFix64(swapFeeRateBps)/10000.0)
     var tryTimes: Int = 10
     var curIn = amountIn
@@ -37,7 +39,7 @@ pub fun getBloctoAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix
     return curIn
 }
 
-pub fun getBloctoAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
+access(all) fun getBloctoAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
     let amountInWithFee = amountIn * (1.0 - UFix64(swapFeeRateBps)/10000.0)
     let amountOut = reserveOut * amountInWithFee / (reserveIn + amountInWithFee);
     return amountOut
@@ -59,7 +61,7 @@ transaction(
     tokenOutReceiverPath: PublicPath,
     tokenOutBalancePath: PublicPath,
 ) {
-    prepare(userAccount: AuthAccount) {
+    prepare(userAccount: auth(Storage, Capabilities) &Account) {
         assert(deadline >= getCurrentBlock().timestamp, message:
             SwapError.ErrorEncode(
                 msg: "EXPIRED",
@@ -74,14 +76,26 @@ transaction(
         let swapOutTokenAddress = tokenAddressFlatSplitPath[len-1]
 
         var tokenInAmountTotal = 0.0
+        var tokenOutAmountTotal = 0.0
+        let splitAmountInWithPoolSource: {String: UFix64} = {}
 
-        var tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+        var tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         if tokenOutReceiverRef == nil {
-            userAccount.save(<-getAccount(swapOutTokenAddress).contracts.borrow<&FungibleToken>(name: swapOutTokenName)!.createEmptyVault(), to: tokenOutVaultPath)
-            userAccount.link<&{FungibleToken.Receiver}>(tokenOutReceiverPath, target: tokenOutVaultPath)
-            userAccount.link<&{FungibleToken.Balance}>(tokenOutBalancePath, target: tokenOutVaultPath)
+            let outTokenAddrStr = swapOutTokenAddress.toString()
+            let outTokenAddrStr0xTrimmed = outTokenAddrStr.slice(from: 2, upTo: outTokenAddrStr.length)
+            /// e.g.: "A.1654653399040a61.FlowToken.Vault"
+            let outTokenVaultRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(swapOutTokenName).concat(".Vault")) ?? panic("outToken get runtime type fail")
+            userAccount.storage.save(<-getAccount(swapOutTokenAddress).contracts.borrow<&{FungibleToken}>(name: swapOutTokenName)!.createEmptyVault(vaultType: outTokenVaultRuntimeType), to: tokenOutVaultPath)
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Receiver}>(tokenOutVaultPath),
+                at: tokenOutReceiverPath
+            )
+            userAccount.capabilities.publish(
+                userAccount.capabilities.storage.issue<&{FungibleToken.Balance}>(tokenOutVaultPath),
+                at: tokenOutBalancePath
+            )
 
-            tokenOutReceiverRef = userAccount.borrow<&FungibleToken.Vault>(from: tokenOutVaultPath)
+            tokenOutReceiverRef = userAccount.storage.borrow<&{FungibleToken.Vault}>(from: tokenOutVaultPath)
         }
 
         var pathIndex = 0
@@ -96,6 +110,7 @@ transaction(
             pathTokenName.append(tokenNameFlatSplitPath[i])
             if (curTokenKey == swapOutKey) {
                 let pathOutAmount = amountOutSplit[pathIndex]
+                tokenOutAmountTotal = tokenOutAmountTotal + pathOutAmount
                 
                 let pathLength = path.length
                 // cal amount in
@@ -134,10 +149,10 @@ transaction(
                         // amount in
                         switch poolKey {
                             case "increment-v1":
-                                let pool = getAccount(poolAddress).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                                let pool = getAccount(poolAddress).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                                 poolInAmount = pool.getAmountIn(amountOut: poolOutAmount, tokenOutKey: tokenOutKey)
                             case "increment-stable":
-                                let pool = getAccount(poolAddress).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                                let pool = getAccount(poolAddress).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                                 poolInAmount = pool.getAmountIn(amountOut: poolOutAmount, tokenOutKey: tokenOutKey)
                             case "metapier":
                                 let pathRef = &[tokenInKey.concat(".Vault"), tokenOutKey.concat(".Vault")] as &[String]
@@ -213,7 +228,7 @@ transaction(
                 
                 tokenInAmountTotal = tokenInAmountTotal + pathInAmount
 
-                var pairInVault <- userAccount.borrow<&FungibleToken.Vault>(from: tokenInVaultPath)!.withdraw(amount: pathInAmount) 
+                var pairInVault <- userAccount.storage.borrow<auth(FungibleToken.Withdraw) &{FungibleToken.Vault}>(from: tokenInVaultPath)!.withdraw(amount: pathInAmount) 
                 
                 while(pathStep < pathLength-1) {
                     let tokenInKey = path[pathStep]
@@ -225,7 +240,11 @@ transaction(
                     var poolIndex = 0;
                     let poolLength = poolAddressesToPairs[pathIndex][pathStep].length
 
-                    var poolOutVault <- getAccount(tokenOutAddress).contracts.borrow<&FungibleToken>(name: tokenOutName)!.createEmptyVault()
+                    let outTokenAddrStr = tokenOutAddress.toString()
+                    let outTokenAddrStr0xTrimmed = outTokenAddrStr.slice(from: 2, upTo: outTokenAddrStr.length)
+                    /// e.g.: "A.1654653399040a61.FlowToken.Vault"
+                    let outTokenVaultRuntimeType = CompositeType("A.".concat(outTokenAddrStr0xTrimmed).concat(".").concat(tokenOutName).concat(".Vault")) ?? panic("outToken get runtime type fail")
+                    var poolOutVault <- getAccount(tokenOutAddress).contracts.borrow<&{FungibleToken}>(name: tokenOutName)!.createEmptyVault(vaultType: outTokenVaultRuntimeType)
 
                     // swap in pool
                     while(poolIndex < poolLength) {
@@ -234,21 +253,29 @@ transaction(
                         
                         var poolInAmount = poolsInOnPath[pathStep][poolIndex]
                         if (poolIndex == poolLength-1) { poolInAmount = pairInVault.balance }
+                        if (pathStep == 0) {
+                            if splitAmountInWithPoolSource.containsKey(poolKey) {
+                                splitAmountInWithPoolSource[poolKey] = splitAmountInWithPoolSource[poolKey]! + poolInAmount
+                            } else {
+                                splitAmountInWithPoolSource[poolKey] = poolInAmount
+                            }
+                        }
 
                         var poolOutAmount = poolsOutOnPath[pathStep][poolIndex]
+                        let prePoolOutBalance = poolOutVault.balance
                         
                         switch poolKey {
                             case "increment-v1":
-                                let pool = getAccount(poolAddress).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                                let pool = getAccount(poolAddress).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                                 poolOutVault.deposit(from: <-pool.swap(vaultIn: <- pairInVault.withdraw(amount: poolInAmount), exactAmountOut: poolOutAmount))
                             
                             case "increment-stable":
-                                let pool = getAccount(poolAddress).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+                                let pool = getAccount(poolAddress).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
                                 poolOutVault.deposit(from: <-pool.swap(vaultIn: <- pairInVault.withdraw(amount: poolInAmount), exactAmountOut: poolOutAmount))
                             
                             case "metapier":
                                 PierRouter.swapTokensAForExactTokensB(
-                                    fromVault: &pairInVault as &FungibleToken.Vault,
+                                    fromVault: &pairInVault as auth(FungibleToken.Withdraw) &{FungibleToken.Vault},
                                     toVault: &poolOutVault as &{FungibleToken.Receiver},
                                     amountInMax: UFix64.max,
                                     amountOut: poolOutAmount,
@@ -301,6 +328,15 @@ transaction(
                                 assert(false, message: "invalid pool type")
                         }
 
+                        LogEntry.LogPoolSwapInAggregator(
+                            tokenInKey: tokenInKey,
+                            tokenOutKey: tokenOutKey,
+                            tokenInAmount: poolInAmount,
+                            tokenOutAmount: poolOutVault.balance - prePoolOutBalance,
+                            poolAddress: poolAddress,
+                            poolSource: poolKey
+                        )
+
                         poolIndex = poolIndex + 1
                     }
                     pairInVault <-> poolOutVault
@@ -317,6 +353,16 @@ transaction(
             }
             i = i + 1
         }
+
+        LogEntry.LogAggregateSwap(
+            userAddr: userAccount.address,
+            tokenInKey: swapInKey,
+            tokenOutKey: swapOutKey,
+            tokenInAmount: tokenInAmountTotal,
+            tokenOutAmount: tokenOutAmountTotal,
+            amountInSplitByPoolSource: splitAmountInWithPoolSource,
+            isExactAForB: false
+        )
 
         assert(tokenInAmountTotal <= amountInMax, message:
             SwapError.ErrorEncode(

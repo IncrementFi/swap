@@ -1,6 +1,6 @@
 import PierSwapFactory from "./PierSwapFactory.cdc" // 0x609e10301860b683
 import PierSwapSettings from "./PierSwapSettings.cdc" // 0x066a74dfb4da0306
-import FungibleToken from "../tokens/FungibleToken.cdc" // 0xf233dcee88fe0abe
+import FungibleToken from "./FungibleToken.cdc" // 0xf233dcee88fe0abe
 import IPierPair from "./IPierPair.cdc" // 0x609e10301860b683
 import PierPair from "./PierPair.cdc" // 0x609e10301860b683
 import PierMath from "./PierMath.cdc" // 0xa378eeb799df8387
@@ -12,10 +12,10 @@ PierRouterLib provides utility functions for PierRouter,
 @author Metapier Foundation Ltd.
 
  */
-pub contract PierRouterLib {
+access(all) contract PierRouterLib {
 
     // Given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
-    pub fun quote(amountA: UFix64, reserveA: UFix64, reserveB: UFix64): UFix64 {
+    access(all) view fun quote(amountA: UFix64, reserveA: UFix64, reserveB: UFix64): UFix64 {
         pre {
             amountA > 0.0: "Metapier PierRouterLib: amountA cannot be 0"
             reserveA > 0.0 && reserveB > 0.0: "Metapier PierRouterLib: Insufficient liquidity"
@@ -37,17 +37,17 @@ pub contract PierRouterLib {
     //  E.g., [TokenA amount (input), TokenB amount, TokenC amount (output)]
     // @return A vault of the last token in the swap path, with its balance equals to
     //  the last amount in `amounts`
-    pub fun makeSwaps(
-        inputVault: @FungibleToken.Vault, 
+    access(all) fun makeSwaps(
+        inputVault: @{FungibleToken.Vault},
         pools: &[&{IPierPair.IPool}], 
         amounts: &[UFix64]
-    ): @FungibleToken.Vault {
+    ): @{FungibleToken.Vault} {
         pre {
             pools.length == amounts.length - 1: "Metapier PierRouterLib: Invalid swap path"
         }
 
         var index = 1
-        var toVault: @FungibleToken.Vault? <- inputVault
+        var toVault: @{FungibleToken.Vault}? <- inputVault
         while index < amounts.length {
             let pool = pools[index - 1]
             let fromVault <- toVault <- nil
@@ -64,13 +64,13 @@ pub contract PierRouterLib {
     }
 
     // Given a swap path, returns the corresponding array of pools
-    pub fun getPoolsByPath(path: &[String]): [&PierPair.Pool{IPierPair.IPool}] {
+    access(all) fun getPoolsByPath(path: &[String]): [&{IPierPair.IPool}] {
         pre {
             path.length >= 2: "Metapier PierRouterLib: Invalid path"
         }
 
         var index = 0
-        let pools: [&PierPair.Pool{IPierPair.IPool}] = []
+        let pools: [&{IPierPair.IPool}] = []
         
         while index < path.length - 1 {
             let pool = PierSwapFactory.getPoolByTypeIdentifiers(
@@ -87,7 +87,7 @@ pub contract PierRouterLib {
 
     // Returns the sorted reserve amounts of the pool according to 
     // the order of [tokenATypeIdentifier, tokenBTypeIdentifier]
-    pub fun getSortedReserves(
+    access(all) view fun getSortedReserves(
         pool: &{IPierPair.IPool}, 
         tokenATypeIdentifier: String, 
         tokenBTypeIdentifier: String
@@ -103,7 +103,7 @@ pub contract PierRouterLib {
 
     // Given amountIn as the expected input of the first token in path,
     // returns amounts of each token in path
-    pub fun getAmountsByAmountIn(amountIn: UFix64, path: &[String], pools: &[&{IPierPair.IPool}]): [UFix64] {
+    access(all) fun getAmountsByAmountIn(amountIn: UFix64, path: &[String], pools: &[&{IPierPair.IPool}]): [UFix64] {
         pre {
             path.length >= 2: "Metapier PierRouterLib: Invalid path"
         }
@@ -132,7 +132,7 @@ pub contract PierRouterLib {
 
     // Given amountOut as the expected output of the last token in path,
     // returns amounts of each token in path
-    pub fun getAmountsByAmountOut(amountOut: UFix64, path: &[String], pools: &[&{IPierPair.IPool}]): [UFix64] {
+    access(all) fun getAmountsByAmountOut(amountOut: UFix64, path: &[String], pools: &[&{IPierPair.IPool}]): [UFix64] {
         pre {
             path.length >= 2: "Metapier PierRouterLib: Invalid path"
         }
@@ -160,7 +160,7 @@ pub contract PierRouterLib {
     }
 
     // Given an input amount of an asset and pair reserves, returns the maximum output amount of the other asset
-    pub fun getAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
+    access(all) view fun getAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
         pre {
             amountIn > 0.0: "Metapier PierRouterLib: amountIn cannot be 0"
             reserveIn > 0.0 && reserveOut > 0.0: "Metapier PierRouterLib: Insufficient liquidity"
@@ -180,7 +180,7 @@ pub contract PierRouterLib {
     }
 
     // Given an output amount of an asset and pair reserves, returns a required input amount of the other asset
-    pub fun getAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
+    access(all) view fun getAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
         pre {
             amountOut > 0.0: "Metapier PierRouterLib: amountOut cannot be 0"
             reserveIn > 0.0 && reserveOut > 0.0: "Metapier PierRouterLib: Insufficient liquidity"

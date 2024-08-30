@@ -8,26 +8,26 @@
 
 import SwapInterfaces from "./SwapInterfaces.cdc"
 
-pub contract SwapConfig {
-    pub var PairPublicPath: PublicPath
-    pub var LpTokenCollectionStoragePath: StoragePath
-    pub var LpTokenCollectionPublicPath: PublicPath
+access(all) contract SwapConfig {
+    access(all) var PairPublicPath: PublicPath
+    access(all) var LpTokenCollectionStoragePath: StoragePath
+    access(all) var LpTokenCollectionPublicPath: PublicPath
 
     /// Scale factor applied to fixed point number calculation.
     /// Note: The use of scale factor is due to fixed point number in cadence is only precise to 1e-8:
     /// https://docs.onflow.org/cadence/language/values-and-types/#fixed-point-numbers
-    pub let scaleFactor: UInt256
+    access(all) let scaleFactor: UInt256
     /// 100_000_000.0, i.e. 1.0e8
-    pub let ufixScale: UFix64
+    access(all) let ufixScale: UFix64
     /// 0.00000001, i.e. 1e-8
-    pub let ufix64NonZeroMin: UFix64
+    access(all) let ufix64NonZeroMin: UFix64
     /// Reserved parameter fields: {ParamName: Value}
     access(self) let _reservedFields: {String: AnyStruct}
 
     /// Utility function to convert a UFix64 number to its scaled equivalent in UInt256 format
     /// e.g. 184467440737.09551615 (UFix64.max) => 184467440737095516150000000000
     ///
-    pub fun UFix64ToScaledUInt256(_ f: UFix64): UInt256 {
+    access(all) view fun UFix64ToScaledUInt256(_ f: UFix64): UInt256 {
         let integral = UInt256(f)
         let fractional = f % 1.0
         let ufixScaledInteger =  integral * UInt256(self.ufixScale) + UInt256(fractional * self.ufixScale)
@@ -37,7 +37,7 @@ pub contract SwapConfig {
     /// Utility function to convert a fixed point number in form of scaled UInt256 back to UFix64 format
     /// e.g. 184467440737095516150000000000 => 184467440737.09551615
     ///
-    pub fun ScaledUInt256ToUFix64(_ scaled: UInt256): UFix64 {
+    access(all) view fun ScaledUInt256ToUFix64(_ scaled: UInt256): UFix64 {
         let integral = scaled / self.scaleFactor
         let ufixScaledFractional = (scaled % self.scaleFactor) * UInt256(self.ufixScale) / self.scaleFactor
         return UFix64(integral) + (UFix64(ufixScaledFractional) / self.ufixScale)
@@ -46,7 +46,7 @@ pub contract SwapConfig {
     /// Utility function to simulate addition of Word256, like Word64 not to throw an overflow error.
     /// e.g. 10 + UInt256.max = 9
     ///
-    pub fun overflowAddUInt256(_ value1: UInt256, _ value2: UInt256): UInt256 {
+    access(all) view fun overflowAddUInt256(_ value1: UInt256, _ value2: UInt256): UInt256 {
         if value1 > UInt256.max - value2 {
             return value2 - (UInt256.max - value1) - 1
         } else {
@@ -57,7 +57,7 @@ pub contract SwapConfig {
     /// Utility function to simulate subtraction of Word256.
     /// e.g. 10 - UInt256.max = 11
     ///
-    pub fun underflowSubtractUInt256(_ value1: UInt256, _ value2: UInt256): UInt256 {
+    access(all) view fun underflowSubtractUInt256(_ value1: UInt256, _ value2: UInt256): UInt256 {
         if value1 >= value2 {
             return value1 - value2
         } else {
@@ -70,7 +70,7 @@ pub contract SwapConfig {
     /// @Param vaultTypeIdentifier - eg. A.f8d6e0586b0a20c7.FlowToken.Vault
     /// @Return tokenTypeIdentifier - eg. A.f8d6e0586b0a20c7.FlowToken
     ///
-    pub fun SliceTokenTypeIdentifierFromVaultType(vaultTypeIdentifier: String): String {
+    access(all) view fun SliceTokenTypeIdentifierFromVaultType(vaultTypeIdentifier: String): String {
         return vaultTypeIdentifier.slice(
             from: 0,
             upTo: vaultTypeIdentifier.length - 6
@@ -81,7 +81,7 @@ pub contract SwapConfig {
     /// Compute √x using Newton's method.
     /// @Param - x: Scaled UFix64 number in cadence. e.g. UFix64ToScaledUInt256( 16.0 )
     ///
-    pub fun sqrt(_ x: UInt256): UInt256 {
+    access(all) view fun sqrt(_ x: UInt256): UInt256 {
         var res: UInt256 = 0
         var one: UInt256 = self.scaleFactor
         if (x > 0) {
@@ -101,7 +101,7 @@ pub contract SwapConfig {
     /// Deprecated Helper function:
     /// Given pair reserves and the exact input amount of an asset, returns the maximum output amount of the other asset
     /// [Deprecated] Use getAmountOutVolatile / getAmountOutStable instead.
-    pub fun getAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
+    access(all) view fun getAmountOut(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
         pre {
             amountIn > 0.0: "SwapPair: insufficient input amount"
             reserveIn > 0.0 && reserveOut > 0.0: "SwapPair: insufficient liquidity"
@@ -119,7 +119,7 @@ pub contract SwapConfig {
     /// Helper function:
     /// Given pair reserves and the exact output amount of an asset wanted, returns the required (minimum) input amount of the other asset
     /// [Deprecated] Use getAmountInVolatile / getAmountInStable instead.
-    pub fun getAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
+    access(all) view fun getAmountIn(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64): UFix64 {
         pre {
             amountOut < reserveOut: "SwapPair: insufficient output amount"
             reserveIn > 0.0 && reserveOut > 0.0: "SwapPair: insufficient liquidity"
@@ -137,7 +137,7 @@ pub contract SwapConfig {
     /// Using the standard constant product formula:
     /// x * y = k
     ///
-    pub fun getAmountOutVolatile(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
+    access(all) view fun getAmountOutVolatile(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
         pre {
             amountIn > 0.0: "SwapPair: insufficient input amount"
             reserveIn > 0.0 && reserveOut > 0.0: "SwapPair: insufficient liquidity"
@@ -155,7 +155,7 @@ pub contract SwapConfig {
     /// Helper function:
     /// Given pair reserves and the exact output amount of an asset wanted, returns the required (minimum) input amount of the other asset
     ///
-    pub fun getAmountInVolatile(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
+    access(all) view fun getAmountInVolatile(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64, swapFeeRateBps: UInt64): UFix64 {
         pre {
             amountOut < reserveOut: "SwapPair: insufficient output amount"
             reserveIn > 0.0 && reserveOut > 0.0: "SwapPair: insufficient liquidity"
@@ -173,7 +173,7 @@ pub contract SwapConfig {
     /// Using the Solidly curve formula:
     /// (px)^3*y + px*y^3 = k
     ///
-    pub fun getAmountOutStable(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64, p: UFix64, swapFeeRateBps: UInt64): UFix64 {
+    access(all) view fun getAmountOutStable(amountIn: UFix64, reserveIn: UFix64, reserveOut: UFix64, p: UFix64, swapFeeRateBps: UInt64): UFix64 {
         pre {
             amountIn > 0.0: "SwapPair: insufficient input amount"
             reserveIn > 0.0 && reserveOut > 0.0: "SwapPair: insufficient liquidity"
@@ -197,7 +197,7 @@ pub contract SwapConfig {
     /// Using the Solidly curve formula:
     /// (px)^3*y + px*y^3 = k
     ///
-    pub fun getAmountInStable(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64, p: UFix64, swapFeeRateBps: UInt64): UFix64 {
+    access(all) view fun getAmountInStable(amountOut: UFix64, reserveIn: UFix64, reserveOut: UFix64, p: UFix64, swapFeeRateBps: UInt64): UFix64 {
         pre {
             amountOut < reserveOut: "SwapPair: insufficient output amount"
             reserveIn > 0.0 && reserveOut > 0.0: "SwapPair: insufficient liquidity"
@@ -219,7 +219,7 @@ pub contract SwapConfig {
     /// Helper function used in adding liquidity & v2-pair's oracle price computation:
     /// Given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
     ///
-    pub fun quote(amountA: UFix64, reserveA: UFix64, reserveB: UFix64): UFix64 {
+    access(all) view fun quote(amountA: UFix64, reserveA: UFix64, reserveB: UFix64): UFix64 {
         pre {
             amountA > 0.0: "SwapPair: insufficient input amount"
             reserveA > 0.0 && reserveB > 0.0: "SwapPair: insufficient liquidity"
@@ -237,7 +237,7 @@ pub contract SwapConfig {
     /// using the current spot price on the Solidly curve formula:
     /// (px)^3*y + px*y^3 = k
     ///
-    pub fun quoteStable(amountA: UFix64, reserveA: UFix64, reserveB: UFix64, p: UFix64): UFix64 {
+    access(all) view fun quoteStable(amountA: UFix64, reserveA: UFix64, reserveB: UFix64, p: UFix64): UFix64 {
         pre {
             amountA > 0.0: "SwapPair: insufficient input amount"
             reserveA > 0.0 && reserveB > 0.0: "SwapPair: insufficient liquidity"
@@ -262,8 +262,8 @@ pub contract SwapConfig {
     ///    1: current cumulative price1 scaled by 1e18
     ///    2: current block timestamp scaled by 1e18
     /// ]
-    pub fun getCurrentCumulativePrices(pairAddr: Address): [UInt256; 3] {
-        let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(self.PairPublicPath).borrow()
+    access(all) view fun getCurrentCumulativePrices(pairAddr: Address): [UInt256; 3] {
+        let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(self.PairPublicPath)
             ?? panic("cannot borrow reference to PairPublic")
         let pairInfo = pairPublicRef.getPairInfo()
         let reserve0 = pairInfo[2] as! UFix64
@@ -300,7 +300,7 @@ pub contract SwapConfig {
 
     /// f(x,y) = p^3 * x^3 * y + p * x * y^3
     /// dy | (x = x1) = p^3 * x^3 + 3 * p * x * y^2, (x = x1)
-    pub fun dy(_ x1: UInt256, _ y: UInt256, _ p: UInt256): UInt256 {
+    access(all) view fun dy(_ x1: UInt256, _ y: UInt256, _ p: UInt256): UInt256 {
         let e18: UInt256 = self.scaleFactor
         let p3 = p * p / e18 * p / e18
         return 3 * p * x1 / e18 * (y * y / e18) / e18 + p3 * x1 / e18 * x1 / e18 * x1 / e18
@@ -308,7 +308,7 @@ pub contract SwapConfig {
 
     /// f(x,y) = p^3 * x^3 * y + p * x * y^3
     /// dx | (y = y1) = 3 * p^3 * y * x^2 + p * y^3, (y = y1)
-    pub fun dx(_ x: UInt256, _ y1: UInt256, _ p: UInt256): UInt256 {
+    access(all) view fun dx(_ x: UInt256, _ y1: UInt256, _ p: UInt256): UInt256 {
         let e18: UInt256 = self.scaleFactor
         let p3 = p * p / e18 * p / e18
         return 3 * p3 * y1 / e18 * (x * x / e18) / e18 + p * y1 / e18 * y1 / e18 * y1 / e18
@@ -317,7 +317,7 @@ pub contract SwapConfig {
     /// f(x, y) = (px)^3 * y + px * y^3 - k0, with k0 = (p*x0)^3 * y0 + p*x0 * y0^3
     /// Given x1, k0, solving y1 for f(x1, y1) = 0 using newton's method: y_n+1 = y_n - f(x1, y_n) / f'(x1, y_n)
     /// Stop searching when |y_n+1 - y_n| < ε
-    pub fun get_y(_ x1: UInt256, _ y0: UInt256, _ k0: UInt256, _ p: UInt256, _ epsilon: UInt256): UInt256 {
+    access(all) view fun get_y(_ x1: UInt256, _ y0: UInt256, _ k0: UInt256, _ p: UInt256, _ epsilon: UInt256): UInt256 {
         let e18 = self.scaleFactor
         var yn = y0
         var dy: UInt256 = 0
@@ -344,7 +344,7 @@ pub contract SwapConfig {
     /// f(x, y) = (px)^3 * y + px * y^3 - k0, with k0 = (p*x0)^3 * y0 + p*x0 * y0^3
     /// Given y1, k0, solving x1 for f(x1, y1) = 0 using newton's method: x_n+1 = x_n - f(x_n, y1) / f'(x_n, y1)
     /// Stop searching when |x_n+1 - x_n| < ε
-    pub fun get_x(_ x0: UInt256, _ y1: UInt256, _ k0: UInt256, _ p: UInt256, _ epsilon: UInt256): UInt256 {
+    access(all) view fun get_x(_ x0: UInt256, _ y1: UInt256, _ k0: UInt256, _ p: UInt256, _ epsilon: UInt256): UInt256 {
         let e18 = self.scaleFactor
         var xn = x0
         var dx: UInt256 = 0
@@ -369,7 +369,7 @@ pub contract SwapConfig {
     }
 
     /// k = (p*x)^3 * y + (p*x) * y^3
-    pub fun k_stable_p(_ balance0: UInt256, _ balance1: UInt256, _ p: UInt256): UInt256 {
+    access(all) view fun k_stable_p(_ balance0: UInt256, _ balance1: UInt256, _ p: UInt256): UInt256 {
         let e18: UInt256 = self.scaleFactor
         let _p3_scaled = p * p / e18 * p / e18
         let _a_scaled: UInt256 = balance0 * balance1 / e18

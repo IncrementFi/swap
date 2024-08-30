@@ -5,15 +5,15 @@
 # Author: Increment Labs
 
 */
-import FungibleToken from "./tokens/FungibleToken.cdc"
+import FungibleToken from "./env/FungibleToken.cdc"
 import SwapError from "./SwapError.cdc"
 import SwapConfig from "./SwapConfig.cdc"
 import SwapInterfaces from "./SwapInterfaces.cdc"
 import StableSwapFactory from "./StableSwapFactory.cdc"
 
-pub contract SwapFactory {
+access(all) contract SwapFactory {
     /// Account which has deployed pair template contract
-    pub var pairContractTemplateAddress: Address
+    access(all) var pairContractTemplateAddress: Address
 
     /// All pairs' address array
     access(self) let pairs: [Address]
@@ -22,10 +22,10 @@ pub contract SwapFactory {
 
     /// Flag indicating weighted keys to be attached when deploying pair contracts for the sake of upgradability & safety reasons.
     /// Now the flag is set but will be nullified in future once Stable Cadence is out and ready for a pure decentralized exchange.
-    pub var pairAccountPublicKey: String?
+    access(all) var pairAccountPublicKey: String?
 
     /// Fee receiver address
-    pub var feeTo: Address?
+    access(all) var feeTo: Address?
 
     /// Reserved parameter fields: {ParamName: Value}
     /// Used fields:
@@ -36,13 +36,13 @@ pub contract SwapFactory {
     access(self) let _reservedFields: {String: AnyStruct}
 
     /// Events
-    pub event PairCreated(token0Key: String, token1Key: String, pairAddress: Address, stableMode: Bool, numPairs: Int)
-    pub event PairTemplateAddressChanged(oldTemplate: Address, newTemplate: Address)
-    pub event FeeToAddressChanged(oldFeeTo: Address?, newFeeTo: Address)
-    pub event FlashloanRateChanged(oldRateBps: UInt64, newRateBps: UInt64)
-    pub event SwapFeeRateChanged(isStablePair: Bool, oldSwapRateBps: UInt64, newSwapRateBps: UInt64)
-    pub event SwapProtocolFeeCutChanged(oldFeeCut: UFix64, newFeeCut: UFix64)
-    pub event PairAccountPublicKeyChanged(oldPublicKey: String?, newPublicKey: String?)
+    access(all) event PairCreated(token0Key: String, token1Key: String, pairAddress: Address, stableMode: Bool, numPairs: Int)
+    access(all) event PairTemplateAddressChanged(oldTemplate: Address, newTemplate: Address)
+    access(all) event FeeToAddressChanged(oldFeeTo: Address?, newFeeTo: Address)
+    access(all) event FlashloanRateChanged(oldRateBps: UInt64, newRateBps: UInt64)
+    access(all) event SwapFeeRateChanged(isStablePair: Bool, oldSwapRateBps: UInt64, newSwapRateBps: UInt64)
+    access(all) event SwapProtocolFeeCutChanged(oldFeeCut: UFix64, newFeeCut: UFix64)
+    access(all) event PairAccountPublicKeyChanged(oldPublicKey: String?, newPublicKey: String?)
 
     /// Create Pair
     ///
@@ -50,7 +50,7 @@ pub contract SwapFactory {
     /// @Param - accountCreationFee: fee (0.001 FlowToken) pay for the account creation.
     /// @Param - stableMode: whether or not it adopts the solidly stableswap algorithm.
     ///
-    pub fun createPair(token0Vault: @FungibleToken.Vault, token1Vault: @FungibleToken.Vault, accountCreationFee: @FungibleToken.Vault, stableMode: Bool): Address {
+    access(all) fun createPair(token0Vault: @{FungibleToken.Vault}, token1Vault: @{FungibleToken.Vault}, accountCreationFee: @{FungibleToken.Vault}, stableMode: Bool): Address {
         pre {
             token0Vault.balance == 0.0 && token1Vault.balance == 0.0:
                 SwapError.ErrorEncode(
@@ -83,9 +83,9 @@ pub contract SwapFactory {
             )
         )
         /// Deposit account creation fee into factory account, which then acts as payer of account creation
-        self.account.getCapability(/public/flowTokenReceiver).borrow<&{FungibleToken.Receiver}>()!.deposit(from: <-accountCreationFee)
+        self.account.capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)!.deposit(from: <-accountCreationFee)
 
-        let pairAccount = AuthAccount(payer: self.account)
+        let pairAccount = Account(payer: self.account)
         if (self.pairAccountPublicKey != nil) {
             pairAccount.keys.add(
                 publicKey: PublicKey(
@@ -138,18 +138,18 @@ pub contract SwapFactory {
         return pairAddress
     }
     
-    pub fun createEmptyLpTokenCollection(): @LpTokenCollection {
+    access(all) fun createEmptyLpTokenCollection(): @LpTokenCollection {
         return <-create LpTokenCollection()
     }
 
     /// The default flashloan rate is 5 bps (0.05%)
-    pub fun getFlashloanRateBps(): UInt64 {
+    access(all) view fun getFlashloanRateBps(): UInt64 {
         return (self._reservedFields["flashloanRateBps"] as! UInt64?) ?? 5
     }
 
     /// Default swap fee rate for volatile pair: 30 bps (0.3%)
     /// Default swap fee rate for stable pair: 4 bps (0.04%)
-    pub fun getSwapFeeRateBps(stableMode: Bool): UInt64 {
+    access(all) view fun getSwapFeeRateBps(stableMode: Bool): UInt64 {
         if (stableMode) {
             return (self._reservedFields["stableRateBps"] as! UInt64?) ?? 4
         } else {
@@ -158,7 +158,7 @@ pub contract SwapFactory {
     }
 
     /// Once feeTo is set, the protocol cuts 1/6 of each trade's fees by default. Otherwise LPs receive 100% of swap fees and there's no protocol cut.
-    pub fun getProtocolFeeCut(): UFix64 {
+    access(all) view fun getProtocolFeeCut(): UFix64 {
         if (self.feeTo == nil) {
             return 0.0
         }
@@ -169,25 +169,21 @@ pub contract SwapFactory {
     ///
     /// Used to collect all lptoken vaults in the user's local storage
     ///
-    pub resource LpTokenCollection: SwapInterfaces.LpTokenCollectionPublic {
-        access(self) var lpTokenVaults: @{Address: FungibleToken.Vault}
+    access(all) resource LpTokenCollection: SwapInterfaces.LpTokenCollectionPublic {
+        access(self) var lpTokenVaults: @{Address: {FungibleToken.Vault}}
 
         init() {
             self.lpTokenVaults <- {}
         }
 
-        destroy() {
-            destroy self.lpTokenVaults
-        }
-
-        pub fun deposit(pairAddr: Address, lpTokenVault: @FungibleToken.Vault) {
+        access(all) fun deposit(pairAddr: Address, lpTokenVault: @{FungibleToken.Vault}) {
             pre {
                 lpTokenVault.balance > 0.0: SwapError.ErrorEncode(
                     msg: "LpTokenCollection: deposit empty lptoken vault",
                     err: SwapError.ErrorCode.INVALID_PARAMETERS
                 )
             }
-            let pairPublicRef = getAccount(pairAddr).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!
+            let pairPublicRef = getAccount(pairAddr).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!
             assert(
                 lpTokenVault.getType() == pairPublicRef.getLpTokenVaultType(), message:
                 SwapError.ErrorEncode(
@@ -197,14 +193,14 @@ pub contract SwapFactory {
             )
 
             if self.lpTokenVaults.containsKey(pairAddr) {
-                let vaultRef = (&self.lpTokenVaults[pairAddr] as &FungibleToken.Vault?)!
+                let vaultRef = (&self.lpTokenVaults[pairAddr] as &{FungibleToken.Vault}?)!
                 vaultRef.deposit(from: <- lpTokenVault)
             } else {
                 self.lpTokenVaults[pairAddr] <-! lpTokenVault
             }
         }
 
-        pub fun withdraw(pairAddr: Address, amount: UFix64): @FungibleToken.Vault {
+        access(FungibleToken.Withdraw) fun withdraw(pairAddr: Address, amount: UFix64): @{FungibleToken.Vault} {
             pre {
                 self.lpTokenVaults.containsKey(pairAddr):
                     SwapError.ErrorEncode(
@@ -213,7 +209,7 @@ pub contract SwapFactory {
                     )
             }
 
-            let vaultRef = (&self.lpTokenVaults[pairAddr] as &FungibleToken.Vault?)!
+            let vaultRef = (&self.lpTokenVaults[pairAddr] as auth(FungibleToken.Withdraw) &{FungibleToken.Vault}?)!
             let withdrawVault <- vaultRef.withdraw(amount: amount)
             if vaultRef.balance == 0.0 {
                 let deletedVault <- self.lpTokenVaults[pairAddr] <- nil
@@ -222,23 +218,23 @@ pub contract SwapFactory {
             return <- withdrawVault
         }
 
-        pub fun getCollectionLength(): Int {
+        access(all) view fun getCollectionLength(): Int {
             return self.lpTokenVaults.keys.length
         }
 
-        pub fun getLpTokenBalance(pairAddr: Address): UFix64 {
+        access(all) view fun getLpTokenBalance(pairAddr: Address): UFix64 {
             if self.lpTokenVaults.containsKey(pairAddr) {
-                let vaultRef = (&self.lpTokenVaults[pairAddr] as &FungibleToken.Vault?)!
+                let vaultRef = (&self.lpTokenVaults[pairAddr] as &{FungibleToken.Vault}?)!
                 return vaultRef.balance
             }
             return 0.0
         }
 
-        pub fun getAllLPTokens(): [Address] {
+        access(all) view fun getAllLPTokens(): [Address] {
             return self.lpTokenVaults.keys
         }
 
-        pub fun getSlicedLPTokens(from: UInt64, to: UInt64): [Address] {
+        access(all) view fun getSlicedLPTokens(from: UInt64, to: UInt64): [Address] {
             pre {
                 from <= to && from < UInt64(self.getCollectionLength()):
                     SwapError.ErrorEncode(
@@ -248,18 +244,12 @@ pub contract SwapFactory {
             }
             let pairLen = UInt64(self.getCollectionLength())
             let endIndex = to >= pairLen ? pairLen - 1 : to
-            var curIndex = from
-            // Array.slice() is not supported yet.
-            let list: [Address] = []
-            while curIndex <= endIndex {
-                list.append(self.lpTokenVaults.keys[curIndex])
-                curIndex = curIndex + 1
-            }
-            return list
+            let upTo = endIndex + 1
+            return self.lpTokenVaults.keys.slice(from: Int(from), upTo: Int(upTo))
         }
     }
 
-    pub fun getPairAddress(token0Key: String, token1Key: String): Address? {
+    access(all) view fun getPairAddress(token0Key: String, token1Key: String): Address? {
         let pairExist0To1 = self.pairMap.containsKey(token0Key) && self.pairMap[token0Key]!.containsKey(token1Key)
         let pairExist1To0 = self.pairMap.containsKey(token1Key) && self.pairMap[token1Key]!.containsKey(token0Key)
         if (pairExist0To1 && pairExist1To0) {
@@ -269,20 +259,20 @@ pub contract SwapFactory {
         }
     }
 
-    pub fun getPairInfo(token0Key: String, token1Key: String): AnyStruct? {
+    access(all) view fun getPairInfo(token0Key: String, token1Key: String): AnyStruct? {
         var pairAddr = self.getPairAddress(token0Key: token0Key, token1Key: token1Key)
         if pairAddr == nil {
             return nil
         }
-        return getAccount(pairAddr!).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!.getPairInfo()
+        return getAccount(pairAddr!).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!.getPairInfo()
     }
 
-    pub fun getAllPairsLength(): Int {
+    access(all) view fun getAllPairsLength(): Int {
         return self.pairs.length
     }
 
     /// Get sliced array of pair addresses (inclusive for both indexes)
-    pub fun getSlicedPairs(from: UInt64, to: UInt64): [Address] {
+    access(all) view fun getSlicedPairs(from: UInt64, to: UInt64): [Address] {
         pre {
             from <= to && from < UInt64(self.pairs.length):
                 SwapError.ErrorEncode(
@@ -292,24 +282,22 @@ pub contract SwapFactory {
         }
         let pairLen = UInt64(self.pairs.length)
         let endIndex = to >= pairLen ? pairLen - 1 : to
-        var curIndex = from
-        // Array.slice() is not supported yet.
-        let list: [Address] = []
-        while curIndex <= endIndex {
-            list.append(self.pairs[curIndex])
-            curIndex = curIndex + 1
-        }
-        return list
+        let upTo = endIndex + 1
+        return self.pairs.slice(from: Int(from), upTo: Int(upTo))
     }
 
     /// Get sliced array of PairInfos (inclusive for both indexes)
-    pub fun getSlicedPairInfos(from: UInt64, to: UInt64): [AnyStruct] {
+    /// Each element (AnyStruct) in the returned array is an array itself
+    access(all) view fun getSlicedPairInfos(from: UInt64, to: UInt64): [AnyStruct] {
         let pairSlice: [Address] = self.getSlicedPairs(from: from, to: to)
         var i = 0
         var res: [AnyStruct] = []
         while(i < pairSlice.length) {
-            res.append(
-                getAccount(pairSlice[i]).getCapability<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath).borrow()!.getPairInfo()
+            // TODO: concat is a temp solution. Use map() once it's made as `view` function.
+            res = res.concat(
+                [
+                    getAccount(pairSlice[i]).capabilities.borrow<&{SwapInterfaces.PairPublic}>(SwapConfig.PairPublicPath)!.getPairInfo()
+                ]
             )
             i = i + 1
         }
@@ -319,15 +307,14 @@ pub contract SwapFactory {
 
     /// Admin function to update feeTo and pair template
     ///
-    pub resource Admin {
-        pub fun setPairContractTemplateAddress(newAddr: Address) {
+    access(all) resource Admin {
+        access(all) fun setPairContractTemplateAddress(newAddr: Address) {
             emit PairTemplateAddressChanged(oldTemplate: SwapFactory.pairContractTemplateAddress, newTemplate: newAddr)
             SwapFactory.pairContractTemplateAddress = newAddr
         }
-        pub fun setFeeTo(feeToAddr: Address) {
-            let lpTokenCollectionCap = getAccount(feeToAddr).getCapability<&{SwapInterfaces.LpTokenCollectionPublic}>(SwapConfig.LpTokenCollectionPublicPath)
-            assert(
-                lpTokenCollectionCap.check(), message:
+        access(all) fun setFeeTo(feeToAddr: Address) {
+            let lpTokenCollectionCap = getAccount(feeToAddr).capabilities.get<&{SwapInterfaces.LpTokenCollectionPublic}>(SwapConfig.LpTokenCollectionPublicPath)
+            assert(lpTokenCollectionCap.check(), message:
                 SwapError.ErrorEncode(
                     msg: "SwapFactory: feeTo account not properly setup with LpTokenCollection resource",
                     err: SwapError.ErrorCode.LOST_PUBLIC_CAPABILITY
@@ -336,10 +323,10 @@ pub contract SwapFactory {
             emit FeeToAddressChanged(oldFeeTo: SwapFactory.feeTo, newFeeTo: feeToAddr)
             SwapFactory.feeTo = feeToAddr
         }
-        pub fun togglePermissionless() {
+        access(all) fun togglePermissionless() {
             SwapFactory.pairAccountPublicKey = nil
         }
-        pub fun setFlashloanRateBps(rateBps: UInt64) {
+        access(all) fun setFlashloanRateBps(rateBps: UInt64) {
             pre {
                 rateBps <= 10000:
                     SwapError.ErrorEncode(
@@ -350,7 +337,7 @@ pub contract SwapFactory {
             emit FlashloanRateChanged(oldRateBps: SwapFactory.getFlashloanRateBps(), newRateBps: rateBps)
             SwapFactory._reservedFields["flashloanRateBps"] = rateBps
         }
-        pub fun setSwapFeeRateBps(rateBps: UInt64, isStable: Bool) {
+        access(all) fun setSwapFeeRateBps(rateBps: UInt64, isStable: Bool) {
             pre {
                 rateBps <= 10000:
                     SwapError.ErrorEncode(
@@ -366,7 +353,7 @@ pub contract SwapFactory {
             }
         }
         /// Once feeTo is turned on, (swapFeeRateBps * feeCut) will be collected and sent to feeTo account as protocol fees.
-        pub fun setProtocolFeeCut(cut: UFix64) {
+        access(all) fun setProtocolFeeCut(cut: UFix64) {
             pre {
                 SwapFactory.feeTo != nil:
                     SwapError.ErrorEncode(
@@ -392,7 +379,7 @@ pub contract SwapFactory {
         self.feeTo = nil
         self._reservedFields = {}
 
-        destroy <-self.account.load<@AnyResource>(from: /storage/swapFactoryAdmin)
-        self.account.save(<-create Admin(), to: /storage/swapFactoryAdmin)
+        destroy <-self.account.storage.load<@AnyResource>(from: /storage/swapFactoryAdmin)
+        self.account.storage.save(<-create Admin(), to: /storage/swapFactoryAdmin)
     }
 }
